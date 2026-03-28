@@ -4,8 +4,8 @@ This is a full-stack assignment implementation with:
 
 - TipTap-based rich editor (open-source extensions only)
 - AI content generation for blog posts and social posts
-- Structured TipTap JSON output (not plain text dumps)
-- Progressive rendering via streamed block chunks into the editor
+- Progressive rendering via SSE streaming events
+- Conversation persistence with TipTap snapshots
 
 ## Tech stack
 
@@ -24,8 +24,9 @@ This is a full-stack assignment implementation with:
 
 ### Strong bonus
 
-- Progressive rendering: `/api/generate-stream` streams NDJSON block chunks and the editor appends them live.
+- Progressive rendering: `/api/stream` streams SSE events (`delta`, `block`, `done`, `error`) and the editor applies them live.
 - Generation can be stopped mid-run from the UI.
+- Ongoing conversations are resumed with `conversationId`.
 
 ### Nice-to-have included
 
@@ -36,13 +37,13 @@ This is a full-stack assignment implementation with:
 
 ### Backend (`api/`)
 
-- `POST /api/generate`: returns a complete TipTap doc.
-- `POST /api/generate-stream`: streams `chunk`, `done`, `error` events.
+- `POST /api/stream`: streams structured events over SSE.
 - AI layer:
-  - Builds system/user prompts by content type.
-  - Requests structured JSON from OpenAI.
-  - Validates with Zod.
-  - Falls back to deterministic structured content if model output is invalid or key is missing.
+  - Calls OpenAI with `stream: true`.
+  - Parses model token deltas into server-validated events.
+  - Emits explicit block boundaries for safe TipTap updates.
+- Persistence layer:
+  - Stores conversations, messages, and document snapshots in `api/data/conversations.json`.
 
 ### Frontend (`web/`)
 
@@ -51,7 +52,7 @@ This is a full-stack assignment implementation with:
   - Prompt field
   - Optional context field
   - Generate/Stop actions
-- TipTap editor receives streamed chunks and inserts each valid node progressively.
+- TipTap editor keeps a valid in-memory document and applies stream events incrementally.
 
 ## Local setup
 
@@ -87,10 +88,10 @@ npm run lint
 
 ## Design choices and tradeoffs
 
-- **Streaming granularity**: block-level streaming was chosen for reliability and editor state safety. Token-level JSON streaming is possible but requires more complex partial-structure recovery.
-- **Schema-first validation**: AI output is validated before use to prevent malformed ProseMirror trees from breaking the editor.
-- **Fallback strategy**: deterministic fallback ensures demo reliability even without API access.
-- **Extensibility**: new content types can be added by extending prompt templates + block post-processing and keeping the same API contract.
+- **Streaming protocol**: SSE with JSON payloads (`event:` + `data:`) keeps transport simple and robust for long responses.
+- **Safety**: the client never parses partial TipTap JSON; it applies explicit `delta`/`block` events to a valid document tree.
+- **Persistence model**: both raw message text and final TipTap JSON are stored to support LLM context and exact editor recreation.
+- **Layout strategy**: basic blocks stream live (paragraphs, headings, lists, images); complex layout can be post-processed after stream completion.
 
 ## With more time
 
