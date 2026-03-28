@@ -1,5 +1,6 @@
 import cors from "cors";
 import express from "express";
+import { registerSnapshotRoutes } from "./routes/snapshots.js";
 import { registerStreamRoute } from "./routes/stream.js";
 
 const app = express();
@@ -13,6 +14,7 @@ app.get("/api/health", (_req, res) => {
 });
 
 registerStreamRoute(app);
+registerSnapshotRoutes(app);
 
 app.listen(port, () => {
   console.log(`[api] listening on http://localhost:${port}`);

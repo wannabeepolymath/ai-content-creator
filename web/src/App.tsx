@@ -1,5 +1,5 @@
-import { useMemo, useRef, useState } from "react";
-import { EditorContent, useEditor } from "@tiptap/react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { EditorContent, useEditor, type Editor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Image from "@tiptap/extension-image";
 import { Table, TableRow, TableHeader, TableCell } from "@tiptap/extension-table";
@@ -40,10 +40,13 @@ export function App() {
   const [context, setContext] = useState("");
   const [contentType, setContentType] = useState<ContentType>("blog");
   const [isGenerating, setIsGenerating] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [isDirty, setIsDirty] = useState(false);
   const [status, setStatus] = useState("Ready.");
   const [abortController, setAbortController] = useState<AbortController | null>(null);
   const [conversationId, setConversationId] = useState<string | null>(null);
   const draftDocRef = useRef<TipTapDoc>({ type: "doc", content: [] });
+  const lastSavedRef = useRef<string>("");
   const draftStateRef = useRef<{
     currentTextNodes: TipTapNode[] | null;
     activeBlock: "paragraph" | "heading" | "list_item" | null;
@@ -70,7 +73,91 @@ export function App() {
     },
   });
 
-  const canGenerate = useMemo(() => prompt.trim().length > 0 && !isGenerating && !!editor, [prompt, isGenerating, editor]);
+  const canGenerate = useMemo(
+    () => prompt.trim().length > 0 && !isGenerating && !isSaving && !!editor,
+    [prompt, isGenerating, isSaving, editor],
+  );
+  const canSave = useMemo(
+    () => !isGenerating && !isSaving && !!editor && isDirty,
+    [isGenerating, isSaving, editor, isDirty],
+  );
+
+  function getEditorSnapshot(editorInstance: Editor) {
+    return JSON.stringify(editorInstance.getJSON());
+  }
+
+  function markEditorAsSaved(editorInstance: Editor) {
+    lastSavedRef.current = getEditorSnapshot(editorInstance);
+    setIsDirty(false);
+  }
+
+  useEffect(() => {
+    if (!editor) {
+      return;
+    }
+    lastSavedRef.current = getEditorSnapshot(editor);
+    setIsDirty(false);
+  }, [editor]);
+
+  useEffect(() => {
+    if (!editor) {
+      return;
+    }
+    const handleUpdate = () => {
+      const snapshot = getEditorSnapshot(editor);
+      setIsDirty(snapshot !== lastSavedRef.current);
+    };
+    editor.on("update", handleUpdate);
+    return () => {
+      editor.off("update", handleUpdate);
+    };
+  }, [editor]);
+
+  async function saveSnapshot(options: {
+    silent?: boolean;
+    editorInstance?: Editor;
+    conversationIdOverride?: string | null;
+  } = {}) {
+    const activeEditor = options.editorInstance ?? editor;
+    if (!activeEditor) {
+      return null;
+    }
+    const activeConversationId = options.conversationIdOverride ?? conversationId;
+    setIsSaving(true);
+    if (!options.silent) {
+      setStatus("Saving...");
+    }
+    try {
+      const response = await fetch(`${apiBase}/api/conversations/snapshot`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          conversationId: activeConversationId,
+          tiptapJson: activeEditor.getJSON(),
+          schemaVersion: 1,
+        }),
+      });
+      if (!response.ok) {
+        throw new Error(`Save failed: ${response.status}`);
+      }
+      const payload = (await response.json()) as { conversationId?: string };
+      if (payload.conversationId) {
+        setConversationId(payload.conversationId);
+      }
+      markEditorAsSaved(activeEditor);
+      if (!options.silent) {
+        setStatus("Saved.");
+      }
+      return payload.conversationId ?? activeConversationId;
+    } catch (error) {
+      if (!options.silent) {
+        setStatus("Save failed.");
+      }
+      return null;
+    } finally {
+      setIsSaving(false);
+    }
+  }
 
   function resetDraftDoc() {
     draftDocRef.current = { type: "doc", content: [] };
@@ -215,9 +302,15 @@ export function App() {
     return { parsed, nextBuffer };
   }
 
-  async function generateStream() {
+  async function generateStream(overrideConversationId?: string | null) {
     if (!editor || !prompt.trim()) {
       return;
+    }
+
+    const activeConversationId = overrideConversationId ?? conversationId;
+    const activeEditor = editor;
+    if (overrideConversationId && overrideConversationId !== conversationId) {
+      setConversationId(overrideConversationId);
     }
 
     const controller = new AbortController();
@@ -227,11 +320,15 @@ export function App() {
     resetDraftDoc();
     renderDraftDoc();
 
+    let finalStatus = "Done.";
+    let generationCompleted = false;
+    let receivedDraftContent = false;
+
     try {
       const response = await fetch(`${apiBase}/api/stream`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt, contentType, context, conversationId }),
+        body: JSON.stringify({ prompt, contentType, context, conversationId: activeConversationId }),
         signal: controller.signal,
       });
 
@@ -257,38 +354,63 @@ export function App() {
           if (evt.event === "delta") {
             const payload = evt.data as StreamDelta;
             if (payload.type === "text") {
+              receivedDraftContent = true;
               pushText(payload.value);
               renderDraftDoc();
+              setIsDirty(true);
             }
           }
           if (evt.event === "block") {
             const payload = evt.data as StreamBlock;
+            receivedDraftContent = true;
             applyBlock(payload);
             renderDraftDoc();
+            setIsDirty(true);
           }
           if (evt.event === "error") {
             const payload = evt.data as { message?: string };
-            setStatus(payload.message ?? "Generation failed.");
+            finalStatus = payload.message ?? "Generation failed.";
           }
           if (evt.event === "done") {
             const payload = evt.data as { ok?: boolean; conversationId?: string };
             if (payload.conversationId) {
               setConversationId(payload.conversationId);
             }
-            setStatus("Done.");
+            generationCompleted = true;
+            markEditorAsSaved(activeEditor);
+            finalStatus = "Done.";
           }
         }
       }
     } catch (error) {
       if (error instanceof DOMException && error.name === "AbortError") {
-        setStatus("Generation stopped.");
+        finalStatus = "Generation stopped.";
       } else {
-        setStatus("Generation failed.");
+        finalStatus = "Generation failed.";
       }
     } finally {
+      if (!generationCompleted && receivedDraftContent) {
+        const savedConversationId = await saveSnapshot({
+          silent: true,
+          editorInstance: activeEditor,
+          conversationIdOverride: activeConversationId,
+        });
+        if (savedConversationId) {
+          finalStatus = `${finalStatus} Progress saved.`;
+        }
+      }
       setAbortController(null);
       setIsGenerating(false);
+      setStatus(finalStatus);
     }
+  }
+
+  async function saveAndGenerate() {
+    const savedConversationId = await saveSnapshot();
+    if (!savedConversationId) {
+      return;
+    }
+    await generateStream(savedConversationId);
   }
 
   function stopGeneration() {
@@ -331,7 +453,7 @@ export function App() {
         </label>
 
         <div className="actions">
-          <button onClick={generateStream} disabled={!canGenerate}>
+          <button onClick={() => void saveAndGenerate()} disabled={!canGenerate}>
             Generate
           </button>
           <button onClick={stopGeneration} disabled={!isGenerating}>
@@ -342,6 +464,11 @@ export function App() {
       </section>
 
       <section className="editor-shell">
+        <div className="editor-header">
+          <button className="save-button" onClick={() => void saveSnapshot()} disabled={!canSave}>
+            Save
+          </button>
+        </div>
         <EditorContent editor={editor} />
       </section>
     </main>

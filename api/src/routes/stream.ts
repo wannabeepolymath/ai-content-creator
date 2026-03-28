@@ -1,9 +1,11 @@
 import type { Express } from "express";
 import { APIUserAbortError } from "openai";
 import { streamDocEvents } from "../ai-service.js";
+import { tiptapDocToText } from "../ai/tiptap-text.js";
 import {
   appendConversationMessage,
   getOrCreateConversation,
+  getLatestSnapshot,
   listConversationMessages,
   saveSnapshot,
 } from "../conversation-store.js";
@@ -46,6 +48,8 @@ export function registerStreamRoute(app: Express) {
         historyMessages: history.length,
       });
       await appendConversationMessage(conversation.conversationId, "user", parsed.data.prompt);
+      const latestSnapshot = await getLatestSnapshot(conversation.conversationId);
+      const latestDocumentText = latestSnapshot ? tiptapDocToText(latestSnapshot.tiptapJson) : "";
 
       if (abortController.signal.aborted) {
         console.log("[/api/stream] client gone before OpenAI call; skipping generation");
@@ -63,7 +67,7 @@ export function registerStreamRoute(app: Express) {
             writeSseEvent(res, "block", value);
           },
         },
-        abortController.signal,
+        { signal: abortController.signal, documentText: latestDocumentText },
       );
 
       await appendConversationMessage(conversation.conversationId, "assistant", streamed.assistantText);

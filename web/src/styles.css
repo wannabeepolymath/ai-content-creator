@@ -67,7 +67,7 @@ button {
   padding: 10px 14px;
   font-weight: 600;
   cursor: pointer;
-  background: #2563eb;
+  background: #e44ec6;
   color: #fff;
 }
 
@@ -84,6 +84,18 @@ button:disabled {
 
 .editor-shell {
   overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.editor-header {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.save-button {
+  background: #e44ec6;
 }
 
 .editor-content {

@@ -21,6 +21,11 @@ type StreamCallbacks = {
   onBlock: (value: StreamBlockData) => void;
 };
 
+type StreamOptions = {
+  signal?: AbortSignal;
+  documentText?: string;
+};
+
 function formatConversationHistory(history: ConversationMessage[]) {
   return history
     .slice(-12)
@@ -33,20 +38,22 @@ export async function streamDocEvents(
   input: GenerateRequest,
   history: ConversationMessage[],
   callbacks: StreamCallbacks,
-  signal?: AbortSignal,
+  options: StreamOptions = {},
 ): Promise<{ assistantText: string; doc: TipTapDoc }> {
   const client = getClient();
   const docBuilder = createStreamDocBuilder();
   const historyText = formatConversationHistory(history);
+  const documentText = options.documentText?.trim() ?? "";
   const model = process.env.OPENAI_MODEL ?? "gpt-4.1-mini";
   const messages = [
     { role: "system" as const, content: buildSystemPrompt() },
-    { role: "user" as const, content: buildUserPrompt(input, historyText) },
+    { role: "user" as const, content: buildUserPrompt(input, historyText, documentText) },
   ];
   console.log("[ai-service] streamDocEvents start", {
     model,
     historyTurns: history.length,
-    signal: Boolean(signal),
+    documentChars: documentText.length,
+    signal: Boolean(options.signal),
   });
   console.log("[ai-service] final prompt to LLM", JSON.stringify(messages, null, 2));
   const stream = await client.chat.completions.create(
@@ -56,7 +63,7 @@ export async function streamDocEvents(
       stream: true,
       messages,
     },
-    signal ? { signal } : undefined,
+    options.signal ? { signal: options.signal } : undefined,
   );
 
   let pending = "";

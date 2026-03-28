@@ -123,6 +123,14 @@ export async function appendConversationMessage(
   return record;
 }
 
+export async function getLatestSnapshot(conversationId: string) {
+  const store = await readStore();
+  const snapshots = store.snapshots
+    .filter((snapshot) => snapshot.conversationId === conversationId)
+    .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+  return snapshots.length ? snapshots[snapshots.length - 1] : null;
+}
+
 export async function saveSnapshot(conversationId: string, tiptapJson: TipTapDoc, schemaVersion = 1) {
   const store = await readStore();
   const snapshot: SnapshotRecord = {
@@ -133,6 +141,10 @@ export async function saveSnapshot(conversationId: string, tiptapJson: TipTapDoc
     createdAt: new Date().toISOString(),
   };
   store.snapshots.push(snapshot);
+  const conversation = store.conversations.find((item) => item.conversationId === conversationId);
+  if (conversation) {
+    conversation.updatedAt = new Date().toISOString();
+  }
   await writeStore(store);
   console.log("[conversation-store] saveSnapshot", {
     conversationId,
