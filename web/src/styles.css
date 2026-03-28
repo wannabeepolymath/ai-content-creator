@@ -1,0 +1,113 @@
+:root {
+  font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  color: #0f172a;
+  background: #f8fafc;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+}
+
+.app {
+  display: grid;
+  grid-template-columns: 340px 1fr;
+  gap: 16px;
+  min-height: 100vh;
+  padding: 16px;
+}
+
+.controls,
+.editor-shell {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 16px;
+}
+
+.controls h1 {
+  margin: 0 0 8px;
+  font-size: 1.3rem;
+}
+
+.controls p {
+  margin-top: 0;
+  color: #334155;
+}
+
+label {
+  display: block;
+  margin-bottom: 12px;
+  font-size: 0.92rem;
+  font-weight: 600;
+  color: #1e293b;
+}
+
+textarea,
+select {
+  width: 100%;
+  margin-top: 6px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  padding: 10px;
+  font: inherit;
+}
+
+.actions {
+  display: flex;
+  gap: 8px;
+}
+
+button {
+  border: none;
+  border-radius: 8px;
+  padding: 10px 14px;
+  font-weight: 600;
+  cursor: pointer;
+  background: #2563eb;
+  color: #fff;
+}
+
+button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.status {
+  margin-top: 10px;
+  font-size: 0.9rem;
+  color: #475569;
+}
+
+.editor-shell {
+  overflow: auto;
+}
+
+.editor-content {
+  min-height: 75vh;
+  outline: none;
+  padding: 8px;
+  line-height: 1.5;
+}
+
+.editor-content img {
+  max-width: 100%;
+  border-radius: 10px;
+  margin: 16px 0;
+}
+
+.editor-content table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 12px 0;
+}
+
+.editor-content th,
+.editor-content td {
+  border: 1px solid #cbd5e1;
+  padding: 8px;
+  vertical-align: top;
+}

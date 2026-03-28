@@ -1,0 +1,14 @@
+{
+  "name": "magi-assignment",
+  "private": true,
+  "version": "0.1.0",
+  "workspaces": [
+    "api",
+    "web"
+  ],
+  "scripts": {
+    "dev": "npm run dev --workspace api & npm run dev --workspace web",
+    "build": "npm run build --workspace api && npm run build --workspace web",
+    "lint": "npm run lint --workspace api && npm run lint --workspace web"
+  }
+}
