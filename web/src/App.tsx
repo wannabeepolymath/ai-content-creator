@@ -48,6 +48,7 @@ import {
 } from "./toolbar-icons";
 
 type ContentType = "social" | "blog";
+type ToolbarPosition = "side" | "top";
 
 type TipTapNode = {
   type: string;
@@ -224,6 +225,7 @@ export function App() {
   const [context, setContext] = useState("");
   const [showContext, setShowContext] = useState(false);
   const [contentType, setContentType] = useState<ContentType>("blog");
+  const [toolbarPosition, setToolbarPosition] = useState<ToolbarPosition>("side");
   const [isGenerating, setIsGenerating] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isDirty, setIsDirty] = useState(false);
@@ -332,6 +334,7 @@ export function App() {
   const canToggleSubscript = editor ? editor.can().chain().focus().toggleSubscript().run() : false;
   const headingLevels = [1, 2, 3, 4] as const;
   const isContextVisible = showContext || context.trim().length > 0;
+  const isTopToolbar = toolbarPosition === "top";
 
   function getEditorSnapshot(editorInstance: Editor) {
     return JSON.stringify(editorInstance.getJSON());
@@ -1026,9 +1029,24 @@ export function App() {
     void saveAndGenerate();
   }
 
+  function toggleToolbarPosition() {
+    setToolbarPosition((current) => (current === "side" ? "top" : "side"));
+  }
+
   const toolbar = (
     <>
       <div className="editor-toolbar">
+        <div className="toolbar-group toolbar-group--layout">
+          <button
+            type="button"
+            className="toolbar-button toolbar-layout-toggle"
+            onClick={toggleToolbarPosition}
+            title={isTopToolbar ? "Move toolbar to the left of the editor" : "Move toolbar above the editor"}
+            aria-label={isTopToolbar ? "Move toolbar to the left of the editor" : "Move toolbar above the editor"}
+          >
+            <span className="toolbar-layout-toggle-label">{isTopToolbar ? "Left" : "Top"}</span>
+          </button>
+        </div>
         <div className="toolbar-group">
           <button
             type="button"
@@ -1648,8 +1666,8 @@ export function App() {
           </div>
         </section>
 
-        <section className="editor-layout">
-          <aside className="editor-toolbar-float" aria-label="Editor formatting toolbar">
+        <section className={`editor-layout ${isTopToolbar ? "is-top" : "is-side"}`}>
+          <aside className={`editor-toolbar-float ${isTopToolbar ? "is-top" : "is-side"}`} aria-label="Editor formatting toolbar">
             {toolbar}
           </aside>
 

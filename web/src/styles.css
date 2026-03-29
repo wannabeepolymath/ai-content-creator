@@ -404,6 +404,12 @@ button:disabled {
   gap: 24px;
 }
 
+.editor-layout.is-top {
+  flex-direction: column;
+  align-items: center;
+  gap: 18px;
+}
+
 .editor-toolbar-float {
   position: sticky;
   top: clamp(96px, calc(50vh - 220px), 220px);
@@ -412,11 +418,25 @@ button:disabled {
   flex: 0 0 76px;
   width: 76px;
   padding: 12px 10px;
-  border: 1px solid rgba(226, 232, 240, 0.95);
+  border: 1px solid transparent;
   border-radius: 24px;
-  background: rgba(255, 255, 255, 0.92);
-  box-shadow: 0 20px 55px rgba(15, 23, 42, 0.12);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(255, 248, 253, 0.96)) padding-box,
+    linear-gradient(135deg, rgba(244, 114, 182, 0.62), rgba(228, 78, 198, 0.5) 62%, rgba(96, 165, 250, 0.34)) border-box;
+  box-shadow:
+    0 20px 55px rgba(15, 23, 42, 0.12),
+    0 0 0 4px rgba(244, 114, 182, 0.08),
+    0 10px 26px rgba(96, 165, 250, 0.1);
   backdrop-filter: blur(14px);
+}
+
+.editor-toolbar-float.is-top {
+  top: 132px;
+  align-self: center;
+  flex: 0 1 auto;
+  width: min(calc(100% - 40px), 980px);
+  max-width: 980px;
+  margin-inline: auto;
 }
 
 .editor-workspace {
@@ -440,6 +460,12 @@ button:disabled {
   gap: 12px;
 }
 
+.editor-layout.is-top .editor-toolbar {
+  flex-direction: row;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
 .toolbar-group {
   display: flex;
   flex-direction: column;
@@ -455,12 +481,35 @@ button:disabled {
   border-bottom: none;
 }
 
+.editor-layout.is-top .toolbar-group {
+  flex-direction: row;
+  width: auto;
+  padding-right: 12px;
+  padding-bottom: 0;
+  border-right: 1px solid #edf2f7;
+  border-bottom: none;
+}
+
+.editor-layout.is-top .toolbar-group:last-child {
+  padding-right: 0;
+  border-right: none;
+}
+
+.toolbar-group--layout {
+  width: 100%;
+}
+
 .toolbar-separator {
   width: 28px;
   height: 1px;
   margin: 2px 0;
   background: #e2e8f0;
   flex-shrink: 0;
+}
+
+.editor-layout.is-top .toolbar-separator {
+  width: 1px;
+  height: 28px;
 }
 
 .toolbar-button {
@@ -494,6 +543,24 @@ button:disabled {
 
 .toolbar-button:disabled {
   opacity: 0.45;
+}
+
+.toolbar-layout-toggle {
+  width: 100%;
+  min-width: 0;
+  padding: 8px 10px;
+}
+
+.editor-layout.is-top .toolbar-layout-toggle {
+  width: auto;
+  min-width: 56px;
+}
+
+.toolbar-layout-toggle-label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
 }
 
 .toolbar-icon {
@@ -563,6 +630,15 @@ button:disabled {
   border: 1px solid #e2e8f0;
   background: #ffffff;
   box-shadow: 0 16px 40px rgba(15, 23, 42, 0.12);
+}
+
+.editor-layout.is-top .highlight-dropdown,
+.editor-layout.is-top .heading-dropdown,
+.editor-layout.is-top .list-dropdown,
+.editor-layout.is-top .table-dropdown,
+.editor-layout.is-top .link-popover {
+  top: calc(100% + 10px);
+  left: 0;
 }
 
 .highlight-dropdown {
@@ -929,6 +1005,13 @@ button:disabled {
     margin: 0 auto;
   }
 
+  .editor-toolbar-float.is-top {
+    top: 118px;
+    width: min(calc(100% - 28px), 980px);
+    max-width: 980px;
+    margin-inline: auto;
+  }
+
   .editor-toolbar {
     flex-direction: row;
     flex-wrap: wrap;
@@ -949,9 +1032,18 @@ button:disabled {
     border-right: none;
   }
 
+  .toolbar-group--layout {
+    width: auto;
+  }
+
   .toolbar-separator {
     width: 1px;
     height: 28px;
+  }
+
+  .toolbar-layout-toggle {
+    width: auto;
+    min-width: 56px;
   }
 
   .highlight-dropdown,
