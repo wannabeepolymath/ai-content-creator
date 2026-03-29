@@ -76,7 +76,7 @@ button:disabled {
 }
 
 .app-header-inner {
-  width: min(1180px, calc(100% - 40px));
+  width: min(1280px, calc(100% - 40px));
   margin: 0 auto;
   padding: 26px 0 18px;
   text-align: center;
@@ -96,7 +96,7 @@ button:disabled {
 }
 
 .app-body {
-  width: min(1180px, calc(100% - 40px));
+  width: min(1280px, calc(100% - 40px));
   margin: 0 auto;
   padding: 28px 0 44px;
 }
@@ -420,9 +420,9 @@ button:disabled {
 }
 
 .editor-workspace {
-  flex: 1 1 860px;
-  width: min(100%, 860px);
-  max-width: 860px;
+  flex: 1 1 980px;
+  width: min(100%, 980px);
+  max-width: 980px;
 }
 
 .editor-surface {
