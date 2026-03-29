@@ -61,6 +61,11 @@ type TipTapDoc = {
   content: TipTapNode[];
 };
 
+const CONTENT_TYPE_OPTIONS = [
+  { value: "blog", label: "Blog Post" },
+  { value: "social", label: "Social Post" },
+] as const satisfies ReadonlyArray<{ value: ContentType; label: string }>;
+
 type StreamDelta = { type: "text"; value: string };
 
 type StreamBlock =
@@ -217,6 +222,7 @@ function restoreLinkSelection(editor: Editor, saved: { from: number; to: number 
 export function App() {
   const [prompt, setPrompt] = useState("");
   const [context, setContext] = useState("");
+  const [showContext, setShowContext] = useState(false);
   const [contentType, setContentType] = useState<ContentType>("blog");
   const [isGenerating, setIsGenerating] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -242,6 +248,7 @@ export function App() {
     pos: number;
   } | null>(null);
   const linkPopoverRef = useRef<HTMLDivElement>(null);
+  const contentTypeMenuRef = useRef<HTMLDivElement>(null);
   const headingMenuRef = useRef<HTMLDivElement>(null);
   const highlightMenuRef = useRef<HTMLDivElement>(null);
   const listMenuRef = useRef<HTMLDivElement>(null);
@@ -252,6 +259,7 @@ export function App() {
   /** Selection when the highlight menu was opened (toolbar click blurs the editor). */
   const highlightSelectionRef = useRef<{ from: number; to: number } | null>(null);
   const [linkPopoverOpen, setLinkPopoverOpen] = useState(false);
+  const [contentTypeMenuOpen, setContentTypeMenuOpen] = useState(false);
   const [headingMenuOpen, setHeadingMenuOpen] = useState(false);
   const [highlightMenuOpen, setHighlightMenuOpen] = useState(false);
   const [listMenuOpen, setListMenuOpen] = useState(false);
@@ -287,7 +295,7 @@ export function App() {
     ],
     content: {
       type: "doc",
-      content: [{ type: "paragraph", content: [{ type: "text", text: "Describe what you want, then generate." }] }],
+      content: [{ type: "paragraph", content: [{ type: "text", text: "" }] }],
     },
     editorProps: {
       attributes: {
@@ -323,6 +331,7 @@ export function App() {
   const canToggleSuperscript = editor ? editor.can().chain().focus().toggleSuperscript().run() : false;
   const canToggleSubscript = editor ? editor.can().chain().focus().toggleSubscript().run() : false;
   const headingLevels = [1, 2, 3, 4] as const;
+  const isContextVisible = showContext || context.trim().length > 0;
 
   function getEditorSnapshot(editorInstance: Editor) {
     return JSON.stringify(editorInstance.getJSON());
@@ -463,6 +472,30 @@ export function App() {
     document.addEventListener("pointerdown", handlePointerDown);
     return () => document.removeEventListener("pointerdown", handlePointerDown);
   }, [linkPopoverOpen]);
+
+  useEffect(() => {
+    if (!contentTypeMenuOpen) {
+      return;
+    }
+    function handlePointerDown(event: PointerEvent) {
+      const el = contentTypeMenuRef.current;
+      if (!el || el.contains(event.target as Node)) {
+        return;
+      }
+      setContentTypeMenuOpen(false);
+    }
+    function handleKeyDown(event: globalThis.KeyboardEvent) {
+      if (event.key === "Escape") {
+        setContentTypeMenuOpen(false);
+      }
+    }
+    document.addEventListener("pointerdown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [contentTypeMenuOpen]);
 
   useEffect(() => {
     if (!headingMenuOpen) {
@@ -976,300 +1009,251 @@ export function App() {
     editor?.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run();
   }
 
-  return (
-    <main className="app">
-      <section className="controls">
-        <h1>Magi AI Content Editor</h1>
-        <p>Create structured social and blog content with progressive rendering.</p>
-        <p>Conversation: {conversationId ?? "new conversation"}</p>
+  function revealContext() {
+    setShowContext(true);
+  }
 
-        <label>
-          Content type
-          <select value={contentType} onChange={(event) => setContentType(event.target.value as ContentType)}>
-            <option value="blog">Blog Post</option>
-            <option value="social">Social Post</option>
-          </select>
-        </label>
+  function removeContext() {
+    setContext("");
+    setShowContext(false);
+  }
 
-        <label>
-          Prompt
-          <textarea
-            rows={4}
-            value={prompt}
-            onChange={(event) => setPrompt(event.target.value)}
-            placeholder="Example: Write a blog post about adopting progressive rendering in AI editors."
-          />
-        </label>
+  function handleGenerateButtonClick() {
+    if (isGenerating) {
+      stopGeneration();
+      return;
+    }
+    void saveAndGenerate();
+  }
 
-        <label>
-          Optional reference context
-          <textarea
-            rows={3}
-            value={context}
-            onChange={(event) => setContext(event.target.value)}
-            placeholder="Paste notes, facts, or source snippets here."
-          />
-        </label>
-
-        <div className="actions">
-          <button onClick={() => void saveAndGenerate()} disabled={!canGenerate}>
-            Generate
+  const toolbar = (
+    <>
+      <div className="editor-toolbar">
+        <div className="toolbar-group">
+          <button
+            type="button"
+            className="toolbar-button"
+            onClick={() => editor?.chain().focus().undo().run()}
+            disabled={!canUndo}
+            title="Undo"
+          >
+            <IconUndo />
           </button>
-          <button onClick={stopGeneration} disabled={!isGenerating}>
-            Stop
+          <button
+            type="button"
+            className="toolbar-button"
+            onClick={() => editor?.chain().focus().redo().run()}
+            disabled={!canRedo}
+            title="Redo"
+          >
+            <IconRedo />
           </button>
         </div>
-        <p className="status">{status}</p>
-      </section>
 
-      <section className="editor-shell">
-        <div className="editor-header">
-          <div className="editor-toolbar">
-            <div className="toolbar-group">
-              <button
-                type="button"
-                className="toolbar-button"
-                onClick={() => editor?.chain().focus().undo().run()}
-                disabled={!canUndo}
-                title="Undo"
-              >
-                <IconUndo />
-              </button>
-              <button
-                type="button"
-                className="toolbar-button"
-                onClick={() => editor?.chain().focus().redo().run()}
-                disabled={!canRedo}
-                title="Redo"
-              >
-                <IconRedo />
-              </button>
-            </div>
-
-            <div className="toolbar-group">
-              <div className="toolbar-heading-wrap" ref={headingMenuRef}>
+        <div className="toolbar-group">
+          <div className="toolbar-heading-wrap" ref={headingMenuRef}>
+            <button
+              type="button"
+              className={`toolbar-button toolbar-heading-trigger ${editor?.isActive("heading") || headingMenuOpen ? "is-active" : ""}`}
+              onClick={() => {
+                setListMenuOpen(false);
+                setTableMenuOpen(false);
+                setHeadingMenuOpen((open) => !open);
+              }}
+              title="Headings"
+              aria-expanded={headingMenuOpen}
+              aria-haspopup="listbox"
+            >
+              <span className="toolbar-heading-trigger-inner" aria-hidden>
+                <span className="toolbar-heading-trigger-h">H</span>
+                <IconChevronDown className="toolbar-icon toolbar-heading-chevron" />
+              </span>
+            </button>
+            {headingMenuOpen ? (
+              <div className="heading-dropdown" role="listbox" aria-label="Heading level">
+                {headingLevels.map((level) => (
+                  <button
+                    key={level}
+                    type="button"
+                    role="option"
+                    aria-selected={editor?.isActive("heading", { level })}
+                    className={`heading-dropdown-item ${editor?.isActive("heading", { level }) ? "is-active" : ""}`}
+                    onClick={() => {
+                      editor?.chain().focus().toggleHeading({ level }).run();
+                      setHeadingMenuOpen(false);
+                    }}
+                  >
+                    <span className={`heading-dropdown-badge heading-dropdown-badge--${level}`} aria-hidden>
+                      H
+                      <sub>{level}</sub>
+                    </span>
+                    <span className="heading-dropdown-label">Heading {level}</span>
+                  </button>
+                ))}
+              </div>
+            ) : null}
+          </div>
+          <div className="toolbar-list-wrap" ref={listMenuRef}>
+            <button
+              type="button"
+              className={`toolbar-button toolbar-list-trigger ${editor?.isActive("bulletList") || editor?.isActive("orderedList") || editor?.isActive("taskList") || listMenuOpen ? "is-active" : ""}`}
+              onClick={() => {
+                setHeadingMenuOpen(false);
+                setTableMenuOpen(false);
+                setListMenuOpen((open) => !open);
+              }}
+              title="Lists"
+              aria-expanded={listMenuOpen}
+              aria-haspopup="listbox"
+            >
+              <span className="toolbar-list-trigger-inner" aria-hidden>
+                <IconListBulleted />
+                <IconChevronDown className="toolbar-icon toolbar-list-chevron" />
+              </span>
+            </button>
+            {listMenuOpen ? (
+              <div className="list-dropdown" role="listbox" aria-label="List type">
                 <button
                   type="button"
-                  className={`toolbar-button toolbar-heading-trigger ${editor?.isActive("heading") || headingMenuOpen ? "is-active" : ""}`}
+                  role="option"
+                  aria-selected={editor?.isActive("bulletList")}
+                  className={`list-dropdown-item ${editor?.isActive("bulletList") ? "is-active" : ""}`}
                   onClick={() => {
+                    editor?.chain().focus().toggleBulletList().run();
                     setListMenuOpen(false);
-                    setTableMenuOpen(false);
-                    setHeadingMenuOpen((open) => !open);
                   }}
-                  title="Headings"
-                  aria-expanded={headingMenuOpen}
-                  aria-haspopup="listbox"
                 >
-                  <span className="toolbar-heading-trigger-inner" aria-hidden>
-                    <span className="toolbar-heading-trigger-h">H</span>
-                    <IconChevronDown className="toolbar-icon toolbar-heading-chevron" />
-                  </span>
-                </button>
-                {headingMenuOpen ? (
-                  <div className="heading-dropdown" role="listbox" aria-label="Heading level">
-                    {headingLevels.map((level) => (
-                      <button
-                        key={level}
-                        type="button"
-                        role="option"
-                        aria-selected={editor?.isActive("heading", { level })}
-                        className={`heading-dropdown-item ${editor?.isActive("heading", { level }) ? "is-active" : ""}`}
-                        onClick={() => {
-                          editor?.chain().focus().toggleHeading({ level }).run();
-                          setHeadingMenuOpen(false);
-                        }}
-                      >
-                        <span className={`heading-dropdown-badge heading-dropdown-badge--${level}`} aria-hidden>
-                          H
-                          <sub>{level}</sub>
-                        </span>
-                        <span className="heading-dropdown-label">Heading {level}</span>
-                      </button>
-                    ))}
-                  </div>
-                ) : null}
-              </div>
-              <div className="toolbar-list-wrap" ref={listMenuRef}>
-                <button
-                  type="button"
-                  className={`toolbar-button toolbar-list-trigger ${editor?.isActive("bulletList") || editor?.isActive("orderedList") || editor?.isActive("taskList") || listMenuOpen ? "is-active" : ""}`}
-                  onClick={() => {
-                    setHeadingMenuOpen(false);
-                    setTableMenuOpen(false);
-                    setListMenuOpen((open) => !open);
-                  }}
-                  title="Lists"
-                  aria-expanded={listMenuOpen}
-                  aria-haspopup="listbox"
-                >
-                  <span className="toolbar-list-trigger-inner" aria-hidden>
+                  <span className="list-dropdown-item-icon">
                     <IconListBulleted />
-                    <IconChevronDown className="toolbar-icon toolbar-list-chevron" />
                   </span>
+                  <span className="list-dropdown-item-label">Bullet list</span>
                 </button>
-                {listMenuOpen ? (
-                  <div className="list-dropdown" role="listbox" aria-label="List type">
-                    <button
-                      type="button"
-                      role="option"
-                      aria-selected={editor?.isActive("bulletList")}
-                      className={`list-dropdown-item ${editor?.isActive("bulletList") ? "is-active" : ""}`}
-                      onClick={() => {
-                        editor?.chain().focus().toggleBulletList().run();
-                        setListMenuOpen(false);
-                      }}
-                    >
-                      <span className="list-dropdown-item-icon">
-                        <IconListBulleted />
-                      </span>
-                      <span className="list-dropdown-item-label">Bullet list</span>
-                    </button>
-                    <button
-                      type="button"
-                      role="option"
-                      aria-selected={editor?.isActive("orderedList")}
-                      className={`list-dropdown-item ${editor?.isActive("orderedList") ? "is-active" : ""}`}
-                      onClick={() => {
-                        editor?.chain().focus().toggleOrderedList().run();
-                        setListMenuOpen(false);
-                      }}
-                    >
-                      <span className="list-dropdown-item-icon">
-                        <IconListNumbered />
-                      </span>
-                      <span className="list-dropdown-item-label">Ordered list</span>
-                    </button>
-                    <button
-                      type="button"
-                      role="option"
-                      aria-selected={editor?.isActive("taskList")}
-                      className={`list-dropdown-item ${editor?.isActive("taskList") ? "is-active" : ""}`}
-                      onClick={() => {
-                        editor?.chain().focus().toggleTaskList().run();
-                        setListMenuOpen(false);
-                      }}
-                    >
-                      <span className="list-dropdown-item-icon">
-                        <IconListTask />
-                      </span>
-                      <span className="list-dropdown-item-label">Task list</span>
-                    </button>
-                  </div>
-                ) : null}
-              </div>
-              <button
-                type="button"
-                className={`toolbar-button ${editor?.isActive("blockquote") ? "is-active" : ""}`}
-                onClick={() => editor?.chain().focus().toggleBlockquote().run()}
-                title="Blockquote"
-              >
-                <IconBlockquote />
-              </button>
-              <button
-                type="button"
-                className={`toolbar-button ${editor?.isActive("codeBlock") ? "is-active" : ""}`}
-                onClick={() => editor?.chain().focus().toggleCodeBlock().run()}
-                title="Code block"
-              >
-                <IconCodeBlock />
-              </button>
-            </div>
-
-            <div className="toolbar-group">
-              <button
-                type="button"
-                className={`toolbar-button ${editor?.isActive("bold") ? "is-active" : ""}`}
-                onClick={() => editor?.chain().focus().toggleBold().run()}
-                disabled={!canToggleBold}
-                title="Bold"
-              >
-                <IconBold />
-              </button>
-              <button
-                type="button"
-                className={`toolbar-button ${editor?.isActive("italic") ? "is-active" : ""}`}
-                onClick={() => editor?.chain().focus().toggleItalic().run()}
-                disabled={!canToggleItalic}
-                title="Italic"
-              >
-                <IconItalic />
-              </button>
-              <button
-                type="button"
-                className={`toolbar-button ${editor?.isActive("underline") ? "is-active" : ""}`}
-                onClick={() => editor?.chain().focus().toggleUnderline().run()}
-                disabled={!canToggleUnderline}
-                title="Underline"
-              >
-                <IconUnderline />
-              </button>
-              <button
-                type="button"
-                className={`toolbar-button ${editor?.isActive("strike") ? "is-active" : ""}`}
-                onClick={() => editor?.chain().focus().toggleStrike().run()}
-                disabled={!canToggleStrike}
-                title="Strikethrough"
-              >
-                <IconStrikethrough />
-              </button>
-              <div className="toolbar-highlight-wrap" ref={highlightMenuRef}>
                 <button
                   type="button"
-                  className={`toolbar-button toolbar-highlight-trigger ${editor?.isActive("highlight") || highlightMenuOpen ? "is-active" : ""}`}
-                  onMouseDown={(event) => {
-                    if (!editor || event.button !== 0) {
-                      return;
-                    }
-                    event.preventDefault();
-                    const { from, to } = editor.state.selection;
-                    highlightSelectionRef.current = { from, to };
-                  }}
+                  role="option"
+                  aria-selected={editor?.isActive("orderedList")}
+                  className={`list-dropdown-item ${editor?.isActive("orderedList") ? "is-active" : ""}`}
                   onClick={() => {
-                    setTableMenuOpen(false);
-                    setHighlightMenuOpen((open) => !open);
+                    editor?.chain().focus().toggleOrderedList().run();
+                    setListMenuOpen(false);
                   }}
-                  title="Highlight"
-                  aria-expanded={highlightMenuOpen}
-                  aria-haspopup="listbox"
-                  aria-label="Highlight"
                 >
-                  <span className="toolbar-highlight-trigger-inner" aria-hidden>
-                    <IconHighlight />
-                    <IconChevronDown className="toolbar-icon toolbar-highlight-chevron" />
+                  <span className="list-dropdown-item-icon">
+                    <IconListNumbered />
                   </span>
+                  <span className="list-dropdown-item-label">Ordered list</span>
                 </button>
-                {highlightMenuOpen ? (
-                  <div className="highlight-dropdown" role="listbox" aria-label="Highlight color">
-                    <div className="highlight-dropdown-swatches" role="presentation">
-                      {HIGHLIGHT_COLORS.map(({ label, color }) => (
-                        <button
-                          key={color}
-                          type="button"
-                          role="option"
-                          aria-selected={editor?.isActive("highlight", { color })}
-                          className={`highlight-swatch ${editor?.isActive("highlight", { color }) ? "is-active" : ""}`}
-                          style={{ backgroundColor: color }}
-                          title={label}
-                          onMouseDown={(event) => {
-                            event.preventDefault();
-                          }}
-                          onClick={() => {
-                            if (!editor) {
-                              return;
-                            }
-                            restoreLinkSelection(editor, highlightSelectionRef.current);
-                            editor.chain().focus().setHighlight({ color }).run();
-                            highlightSelectionRef.current = null;
-                            setHighlightMenuOpen(false);
-                          }}
-                        />
-                      ))}
-                    </div>
-                    <span className="highlight-dropdown-divider" aria-hidden />
+                <button
+                  type="button"
+                  role="option"
+                  aria-selected={editor?.isActive("taskList")}
+                  className={`list-dropdown-item ${editor?.isActive("taskList") ? "is-active" : ""}`}
+                  onClick={() => {
+                    editor?.chain().focus().toggleTaskList().run();
+                    setListMenuOpen(false);
+                  }}
+                >
+                  <span className="list-dropdown-item-icon">
+                    <IconListTask />
+                  </span>
+                  <span className="list-dropdown-item-label">Task list</span>
+                </button>
+              </div>
+            ) : null}
+          </div>
+          <button
+            type="button"
+            className={`toolbar-button ${editor?.isActive("blockquote") ? "is-active" : ""}`}
+            onClick={() => editor?.chain().focus().toggleBlockquote().run()}
+            title="Blockquote"
+          >
+            <IconBlockquote />
+          </button>
+          <button
+            type="button"
+            className={`toolbar-button ${editor?.isActive("codeBlock") ? "is-active" : ""}`}
+            onClick={() => editor?.chain().focus().toggleCodeBlock().run()}
+            title="Code block"
+          >
+            <IconCodeBlock />
+          </button>
+        </div>
+
+        <div className="toolbar-group">
+          <button
+            type="button"
+            className={`toolbar-button ${editor?.isActive("bold") ? "is-active" : ""}`}
+            onClick={() => editor?.chain().focus().toggleBold().run()}
+            disabled={!canToggleBold}
+            title="Bold"
+          >
+            <IconBold />
+          </button>
+          <button
+            type="button"
+            className={`toolbar-button ${editor?.isActive("italic") ? "is-active" : ""}`}
+            onClick={() => editor?.chain().focus().toggleItalic().run()}
+            disabled={!canToggleItalic}
+            title="Italic"
+          >
+            <IconItalic />
+          </button>
+          <button
+            type="button"
+            className={`toolbar-button ${editor?.isActive("underline") ? "is-active" : ""}`}
+            onClick={() => editor?.chain().focus().toggleUnderline().run()}
+            disabled={!canToggleUnderline}
+            title="Underline"
+          >
+            <IconUnderline />
+          </button>
+          <button
+            type="button"
+            className={`toolbar-button ${editor?.isActive("strike") ? "is-active" : ""}`}
+            onClick={() => editor?.chain().focus().toggleStrike().run()}
+            disabled={!canToggleStrike}
+            title="Strikethrough"
+          >
+            <IconStrikethrough />
+          </button>
+          <div className="toolbar-highlight-wrap" ref={highlightMenuRef}>
+            <button
+              type="button"
+              className={`toolbar-button toolbar-highlight-trigger ${editor?.isActive("highlight") || highlightMenuOpen ? "is-active" : ""}`}
+              onMouseDown={(event) => {
+                if (!editor || event.button !== 0) {
+                  return;
+                }
+                event.preventDefault();
+                const { from, to } = editor.state.selection;
+                highlightSelectionRef.current = { from, to };
+              }}
+              onClick={() => {
+                setTableMenuOpen(false);
+                setHighlightMenuOpen((open) => !open);
+              }}
+              title="Highlight"
+              aria-expanded={highlightMenuOpen}
+              aria-haspopup="listbox"
+              aria-label="Highlight"
+            >
+              <span className="toolbar-highlight-trigger-inner" aria-hidden>
+                <IconHighlight />
+                <IconChevronDown className="toolbar-icon toolbar-highlight-chevron" />
+              </span>
+            </button>
+            {highlightMenuOpen ? (
+              <div className="highlight-dropdown" role="listbox" aria-label="Highlight color">
+                <div className="highlight-dropdown-swatches" role="presentation">
+                  {HIGHLIGHT_COLORS.map(({ label, color }) => (
                     <button
+                      key={color}
                       type="button"
-                      className="highlight-dropdown-clear"
-                      title="Remove highlight"
+                      role="option"
+                      aria-selected={editor?.isActive("highlight", { color })}
+                      className={`highlight-swatch ${editor?.isActive("highlight", { color }) ? "is-active" : ""}`}
+                      style={{ backgroundColor: color }}
+                      title={label}
                       onMouseDown={(event) => {
                         event.preventDefault();
                       }}
@@ -1278,270 +1262,404 @@ export function App() {
                           return;
                         }
                         restoreLinkSelection(editor, highlightSelectionRef.current);
-                        editor.chain().focus().unsetHighlight().run();
+                        editor.chain().focus().setHighlight({ color }).run();
                         highlightSelectionRef.current = null;
                         setHighlightMenuOpen(false);
                       }}
-                    >
-                      <IconHighlightNone className="toolbar-icon" />
-                    </button>
-                  </div>
-                ) : null}
-              </div>
-              <button
-                type="button"
-                className={`toolbar-button ${editor?.isActive("code") ? "is-active" : ""}`}
-                onClick={() => editor?.chain().focus().toggleCode().run()}
-                disabled={!canToggleCode}
-                title="Inline code"
-              >
-                <IconCodeInline />
-              </button>
-              <span className="toolbar-separator" aria-hidden />
-              <button
-                type="button"
-                className={`toolbar-button ${editor?.isActive("superscript") ? "is-active" : ""}`}
-                onClick={() => editor?.chain().focus().toggleSuperscript().run()}
-                disabled={!canToggleSuperscript}
-                title="Superscript"
-              >
-                <IconSuperscript />
-              </button>
-              <button
-                type="button"
-                className={`toolbar-button ${editor?.isActive("subscript") ? "is-active" : ""}`}
-                onClick={() => editor?.chain().focus().toggleSubscript().run()}
-                disabled={!canToggleSubscript}
-                title="Subscript"
-              >
-                <IconSubscript />
-              </button>
-            </div>
-
-            <div className="toolbar-group">
-              <button
-                type="button"
-                className={`toolbar-button ${editor?.isActive({ textAlign: "left" }) ? "is-active" : ""}`}
-                onClick={() => editor?.chain().focus().setTextAlign("left").run()}
-                title="Align left"
-              >
-                <IconAlignLeft />
-              </button>
-              <button
-                type="button"
-                className={`toolbar-button ${editor?.isActive({ textAlign: "center" }) ? "is-active" : ""}`}
-                onClick={() => editor?.chain().focus().setTextAlign("center").run()}
-                title="Align center"
-              >
-                <IconAlignCenter />
-              </button>
-              <button
-                type="button"
-                className={`toolbar-button ${editor?.isActive({ textAlign: "right" }) ? "is-active" : ""}`}
-                onClick={() => editor?.chain().focus().setTextAlign("right").run()}
-                title="Align right"
-              >
-                <IconAlignRight />
-              </button>
-              <button
-                type="button"
-                className={`toolbar-button ${editor?.isActive({ textAlign: "justify" }) ? "is-active" : ""}`}
-                onClick={() => editor?.chain().focus().setTextAlign("justify").run()}
-                title="Justify"
-              >
-                <IconAlignJustify />
-              </button>
-            </div>
-
-            <div className="toolbar-group">
-              <div className="toolbar-link-wrap" ref={linkPopoverRef}>
-                <button
-                  type="button"
-                  className={`toolbar-button ${isLinkActive || linkPopoverOpen ? "is-active" : ""}`}
-                  onMouseDown={(event) => {
-                    if (!editor || linkPopoverOpen) {
-                      return;
-                    }
-                    if (event.button !== 0) {
-                      return;
-                    }
-                    const { from, to } = editor.state.selection;
-                    linkSelectionRef.current = { from, to };
-                  }}
-                  onClick={toggleLinkPopover}
-                  title="Link"
-                  aria-expanded={linkPopoverOpen}
-                  aria-haspopup="dialog"
-                >
-                  <IconLink />
-                </button>
-                {linkPopoverOpen ? (
-                  <div className="link-popover" role="dialog" aria-label="Edit link">
-                    <input
-                      ref={linkInputRef}
-                      type="url"
-                      className="link-popover-input"
-                      placeholder="Paste a link..."
-                      value={linkUrlDraft}
-                      onChange={(event) => setLinkUrlDraft(event.target.value)}
-                      onKeyDown={handleLinkInputKeyDown}
                     />
-                    <span className="link-popover-divider" aria-hidden />
-                    <div className="link-popover-actions">
-                      <button type="button" className="link-popover-icon-btn" onClick={applyLinkFromPopover} title="Apply link">
-                        <IconLinkApply className="toolbar-icon" />
-                      </button>
-                      <button
-                        type="button"
-                        className="link-popover-icon-btn"
-                        onClick={openLinkFromPopover}
-                        disabled={!linkUrlDraft.trim() && !isLinkActive}
-                        title="Open in new tab"
-                      >
-                        <IconExternalLink className="toolbar-icon" />
-                      </button>
-                      <button type="button" className="link-popover-icon-btn" onClick={clearLinkFromPopover} title="Remove link">
-                        <IconTrash className="toolbar-icon" />
-                      </button>
-                    </div>
-                  </div>
-                ) : null}
-              </div>
-              <button type="button" className="toolbar-button" onClick={openImageFilePicker} title="Insert image from file">
-                <IconImageAdd />
-              </button>
-              <div className="toolbar-table-wrap" ref={tableMenuRef}>
+                  ))}
+                </div>
+                <span className="highlight-dropdown-divider" aria-hidden />
                 <button
                   type="button"
-                  className={`toolbar-button toolbar-table-trigger ${editor?.isActive("table") || tableMenuOpen ? "is-active" : ""}`}
-                  onClick={() => {
-                    setHeadingMenuOpen(false);
-                    setListMenuOpen(false);
-                    setHighlightMenuOpen(false);
-                    setTableMenuOpen((open) => !open);
+                  className="highlight-dropdown-clear"
+                  title="Remove highlight"
+                  onMouseDown={(event) => {
+                    event.preventDefault();
                   }}
-                  title="Table"
-                  aria-expanded={tableMenuOpen}
-                  aria-haspopup="listbox"
-                  aria-label="Table"
+                  onClick={() => {
+                    if (!editor) {
+                      return;
+                    }
+                    restoreLinkSelection(editor, highlightSelectionRef.current);
+                    editor.chain().focus().unsetHighlight().run();
+                    highlightSelectionRef.current = null;
+                    setHighlightMenuOpen(false);
+                  }}
                 >
-                  <span className="toolbar-table-trigger-inner" aria-hidden>
-                    <IconTable />
-                    <IconChevronDown className="toolbar-icon toolbar-table-chevron" />
-                  </span>
+                  <IconHighlightNone className="toolbar-icon" />
                 </button>
-                {tableMenuOpen ? (
-                  <div className="table-dropdown" role="listbox" aria-label="Table actions">
-                    <button
-                      type="button"
-                      role="option"
-                      className="table-dropdown-item"
-                      disabled={!canInsertTable}
-                      onClick={() => insertTable()}
-                    >
-                      <span className="table-dropdown-item-icon">
-                        <IconTable />
-                      </span>
-                      <span className="table-dropdown-item-label">Insert table</span>
-                    </button>
-                    <div className="table-dropdown-divider" role="separator" />
-                    <button
-                      type="button"
-                      role="option"
-                      className="table-dropdown-item"
-                      disabled={!canAddRow}
-                      onClick={() => editor?.chain().focus().addRowAfter().run()}
-                    >
-                      <span className="table-dropdown-item-icon">
-                        <IconRowPlus />
-                      </span>
-                      <span className="table-dropdown-item-label">Add row</span>
-                    </button>
-                    <button
-                      type="button"
-                      role="option"
-                      className="table-dropdown-item"
-                      disabled={!canDeleteRow}
-                      onClick={() => editor?.chain().focus().deleteRow().run()}
-                    >
-                      <span className="table-dropdown-item-icon">
-                        <IconRowMinus />
-                      </span>
-                      <span className="table-dropdown-item-label">Delete row</span>
-                    </button>
-                    <button
-                      type="button"
-                      role="option"
-                      className="table-dropdown-item"
-                      disabled={!canAddColumn}
-                      onClick={() => editor?.chain().focus().addColumnAfter().run()}
-                    >
-                      <span className="table-dropdown-item-icon">
-                        <IconColPlus />
-                      </span>
-                      <span className="table-dropdown-item-label">Add column</span>
-                    </button>
-                    <button
-                      type="button"
-                      role="option"
-                      className="table-dropdown-item"
-                      disabled={!canDeleteColumn}
-                      onClick={() => editor?.chain().focus().deleteColumn().run()}
-                    >
-                      <span className="table-dropdown-item-icon">
-                        <IconColMinus />
-                      </span>
-                      <span className="table-dropdown-item-label">Delete column</span>
-                    </button>
-                    <button
-                      type="button"
-                      role="option"
-                      className="table-dropdown-item table-dropdown-item--danger"
-                      disabled={!canDeleteTable}
-                      onClick={() => editor?.chain().focus().deleteTable().run()}
-                    >
-                      <span className="table-dropdown-item-icon">
-                        <IconTrash />
-                      </span>
-                      <span className="table-dropdown-item-label">Delete table</span>
-                    </button>
-                  </div>
-                ) : null}
               </div>
-              <button
-                type="button"
-                className="toolbar-button"
-                onClick={() => editor?.chain().focus().setHorizontalRule().run()}
-                title="Horizontal rule"
-              >
-                <IconHorizontalRule />
-              </button>
-              <button
-                type="button"
-                className="toolbar-button"
-                onClick={() => editor?.chain().focus().unsetAllMarks().clearNodes().run()}
-                title="Clear formatting"
-              >
-                <IconClearFormat />
-              </button>
-            </div>
+            ) : null}
           </div>
-          <input
-            ref={imageFileInputRef}
-            type="file"
-            className="visually-hidden"
-            accept="image/*"
-            aria-hidden
-            tabIndex={-1}
-            onChange={handleImageFileSelected}
-          />
-
-          <button className="save-button" onClick={() => void saveSnapshot()} disabled={!canSave}>
-            Save
+          <button
+            type="button"
+            className={`toolbar-button ${editor?.isActive("code") ? "is-active" : ""}`}
+            onClick={() => editor?.chain().focus().toggleCode().run()}
+            disabled={!canToggleCode}
+            title="Inline code"
+          >
+            <IconCodeInline />
+          </button>
+          <span className="toolbar-separator" aria-hidden />
+          <button
+            type="button"
+            className={`toolbar-button ${editor?.isActive("superscript") ? "is-active" : ""}`}
+            onClick={() => editor?.chain().focus().toggleSuperscript().run()}
+            disabled={!canToggleSuperscript}
+            title="Superscript"
+          >
+            <IconSuperscript />
+          </button>
+          <button
+            type="button"
+            className={`toolbar-button ${editor?.isActive("subscript") ? "is-active" : ""}`}
+            onClick={() => editor?.chain().focus().toggleSubscript().run()}
+            disabled={!canToggleSubscript}
+            title="Subscript"
+          >
+            <IconSubscript />
           </button>
         </div>
-        <EditorContent editor={editor} />
-      </section>
+
+        <div className="toolbar-group">
+          <button
+            type="button"
+            className={`toolbar-button ${editor?.isActive({ textAlign: "left" }) ? "is-active" : ""}`}
+            onClick={() => editor?.chain().focus().setTextAlign("left").run()}
+            title="Align left"
+          >
+            <IconAlignLeft />
+          </button>
+          <button
+            type="button"
+            className={`toolbar-button ${editor?.isActive({ textAlign: "center" }) ? "is-active" : ""}`}
+            onClick={() => editor?.chain().focus().setTextAlign("center").run()}
+            title="Align center"
+          >
+            <IconAlignCenter />
+          </button>
+          <button
+            type="button"
+            className={`toolbar-button ${editor?.isActive({ textAlign: "right" }) ? "is-active" : ""}`}
+            onClick={() => editor?.chain().focus().setTextAlign("right").run()}
+            title="Align right"
+          >
+            <IconAlignRight />
+          </button>
+          <button
+            type="button"
+            className={`toolbar-button ${editor?.isActive({ textAlign: "justify" }) ? "is-active" : ""}`}
+            onClick={() => editor?.chain().focus().setTextAlign("justify").run()}
+            title="Justify"
+          >
+            <IconAlignJustify />
+          </button>
+        </div>
+
+        <div className="toolbar-group">
+          <div className="toolbar-link-wrap" ref={linkPopoverRef}>
+            <button
+              type="button"
+              className={`toolbar-button ${isLinkActive || linkPopoverOpen ? "is-active" : ""}`}
+              onMouseDown={(event) => {
+                if (!editor || linkPopoverOpen) {
+                  return;
+                }
+                if (event.button !== 0) {
+                  return;
+                }
+                const { from, to } = editor.state.selection;
+                linkSelectionRef.current = { from, to };
+              }}
+              onClick={toggleLinkPopover}
+              title="Link"
+              aria-expanded={linkPopoverOpen}
+              aria-haspopup="dialog"
+            >
+              <IconLink />
+            </button>
+            {linkPopoverOpen ? (
+              <div className="link-popover" role="dialog" aria-label="Edit link">
+                <input
+                  ref={linkInputRef}
+                  type="url"
+                  className="link-popover-input"
+                  placeholder="Paste a link..."
+                  value={linkUrlDraft}
+                  onChange={(event) => setLinkUrlDraft(event.target.value)}
+                  onKeyDown={handleLinkInputKeyDown}
+                />
+                <span className="link-popover-divider" aria-hidden />
+                <div className="link-popover-actions">
+                  <button type="button" className="link-popover-icon-btn" onClick={applyLinkFromPopover} title="Apply link">
+                    <IconLinkApply className="toolbar-icon" />
+                  </button>
+                  <button
+                    type="button"
+                    className="link-popover-icon-btn"
+                    onClick={openLinkFromPopover}
+                    disabled={!linkUrlDraft.trim() && !isLinkActive}
+                    title="Open in new tab"
+                  >
+                    <IconExternalLink className="toolbar-icon" />
+                  </button>
+                  <button type="button" className="link-popover-icon-btn" onClick={clearLinkFromPopover} title="Remove link">
+                    <IconTrash className="toolbar-icon" />
+                  </button>
+                </div>
+              </div>
+            ) : null}
+          </div>
+          <button type="button" className="toolbar-button" onClick={openImageFilePicker} title="Insert image from file">
+            <IconImageAdd />
+          </button>
+          <div className="toolbar-table-wrap" ref={tableMenuRef}>
+            <button
+              type="button"
+              className={`toolbar-button toolbar-table-trigger ${editor?.isActive("table") || tableMenuOpen ? "is-active" : ""}`}
+              onClick={() => {
+                setHeadingMenuOpen(false);
+                setListMenuOpen(false);
+                setHighlightMenuOpen(false);
+                setTableMenuOpen((open) => !open);
+              }}
+              title="Table"
+              aria-expanded={tableMenuOpen}
+              aria-haspopup="listbox"
+              aria-label="Table"
+            >
+              <span className="toolbar-table-trigger-inner" aria-hidden>
+                <IconTable />
+                <IconChevronDown className="toolbar-icon toolbar-table-chevron" />
+              </span>
+            </button>
+            {tableMenuOpen ? (
+              <div className="table-dropdown" role="listbox" aria-label="Table actions">
+                <button
+                  type="button"
+                  role="option"
+                  className="table-dropdown-item"
+                  disabled={!canInsertTable}
+                  onClick={() => insertTable()}
+                >
+                  <span className="table-dropdown-item-icon">
+                    <IconTable />
+                  </span>
+                  <span className="table-dropdown-item-label">Insert table</span>
+                </button>
+                <div className="table-dropdown-divider" role="separator" />
+                <button
+                  type="button"
+                  role="option"
+                  className="table-dropdown-item"
+                  disabled={!canAddRow}
+                  onClick={() => editor?.chain().focus().addRowAfter().run()}
+                >
+                  <span className="table-dropdown-item-icon">
+                    <IconRowPlus />
+                  </span>
+                  <span className="table-dropdown-item-label">Add row</span>
+                </button>
+                <button
+                  type="button"
+                  role="option"
+                  className="table-dropdown-item"
+                  disabled={!canDeleteRow}
+                  onClick={() => editor?.chain().focus().deleteRow().run()}
+                >
+                  <span className="table-dropdown-item-icon">
+                    <IconRowMinus />
+                  </span>
+                  <span className="table-dropdown-item-label">Delete row</span>
+                </button>
+                <button
+                  type="button"
+                  role="option"
+                  className="table-dropdown-item"
+                  disabled={!canAddColumn}
+                  onClick={() => editor?.chain().focus().addColumnAfter().run()}
+                >
+                  <span className="table-dropdown-item-icon">
+                    <IconColPlus />
+                  </span>
+                  <span className="table-dropdown-item-label">Add column</span>
+                </button>
+                <button
+                  type="button"
+                  role="option"
+                  className="table-dropdown-item"
+                  disabled={!canDeleteColumn}
+                  onClick={() => editor?.chain().focus().deleteColumn().run()}
+                >
+                  <span className="table-dropdown-item-icon">
+                    <IconColMinus />
+                  </span>
+                  <span className="table-dropdown-item-label">Delete column</span>
+                </button>
+                <button
+                  type="button"
+                  role="option"
+                  className="table-dropdown-item table-dropdown-item--danger"
+                  disabled={!canDeleteTable}
+                  onClick={() => editor?.chain().focus().deleteTable().run()}
+                >
+                  <span className="table-dropdown-item-icon">
+                    <IconTrash />
+                  </span>
+                  <span className="table-dropdown-item-label">Delete table</span>
+                </button>
+              </div>
+            ) : null}
+          </div>
+          <button
+            type="button"
+            className="toolbar-button"
+            onClick={() => editor?.chain().focus().setHorizontalRule().run()}
+            title="Horizontal rule"
+          >
+            <IconHorizontalRule />
+          </button>
+          <button
+            type="button"
+            className="toolbar-button"
+            onClick={() => editor?.chain().focus().unsetAllMarks().clearNodes().run()}
+            title="Clear formatting"
+          >
+            <IconClearFormat />
+          </button>
+        </div>
+      </div>
+      <input
+        ref={imageFileInputRef}
+        type="file"
+        className="visually-hidden"
+        accept="image/*"
+        aria-hidden
+        tabIndex={-1}
+        onChange={handleImageFileSelected}
+      />
+    </>
+  );
+
+  return (
+    <main className="app-shell">
+      <header className="app-header">
+        <div className="app-header-inner">
+          <h1>MAGI</h1>
+          <p className="app-subtitle">AI Content Creator</p>
+        </div>
+      </header>
+
+      <div className="app-body">
+        <section className="prompt-section">
+          <div className="prompt-card">
+            <div className="prompt-card-meta">
+              <div className="prompt-card-controls">
+                <label className="prompt-select-inline">
+                  <span className="prompt-select-label">Content type</span>
+                  <span className="prompt-select-wrap" ref={contentTypeMenuRef}>
+                    <button
+                      type="button"
+                      className={`prompt-select-trigger ${contentTypeMenuOpen ? "is-open" : ""}`}
+                      onClick={() => setContentTypeMenuOpen((open) => !open)}
+                      aria-haspopup="listbox"
+                      aria-expanded={contentTypeMenuOpen}
+                    >
+                      <span>{CONTENT_TYPE_OPTIONS.find((option) => option.value === contentType)?.label ?? "Blog Post"}</span>
+                      <IconChevronDown className="prompt-select-chevron" />
+                    </button>
+                    {contentTypeMenuOpen ? (
+                      <div className="prompt-select-dropdown" role="listbox" aria-label="Content type">
+                        {CONTENT_TYPE_OPTIONS.map((option) => (
+                          <button
+                            key={option.value}
+                            type="button"
+                            role="option"
+                            aria-selected={contentType === option.value}
+                            className={`prompt-select-option ${contentType === option.value ? "is-active" : ""}`}
+                            onClick={() => {
+                              setContentType(option.value);
+                              setContentTypeMenuOpen(false);
+                            }}
+                          >
+                            {option.label}
+                          </button>
+                        ))}
+                      </div>
+                    ) : null}
+                  </span>
+                </label>
+
+                <button type="button" className="secondary-button save-button-inline" onClick={() => void saveSnapshot()} disabled={!canSave}>
+                  Save
+                </button>
+              </div>
+            </div>
+
+            <label className="prompt-field">
+              <span>Prompt</span>
+              <textarea
+                rows={5}
+                value={prompt}
+                onChange={(event) => setPrompt(event.target.value)}
+                placeholder="Describe the content you want to create..."
+              />
+            </label>
+
+            <div className={`context-panel ${isContextVisible ? "is-visible" : ""}`} aria-hidden={!isContextVisible}>
+              <div className="context-panel-inner">
+                <div className="context-panel-header">
+                  <span>Context</span>
+                  <button type="button" className="context-remove-button" onClick={removeContext}>
+                    Remove
+                  </button>
+                </div>
+
+                <textarea
+                  rows={4}
+                  value={context}
+                  onChange={(event) => setContext(event.target.value)}
+                  placeholder="Add context for the AI..."
+                />
+              </div>
+            </div>
+
+            <div className="prompt-footer">
+              <div className="prompt-actions-row">
+                {!isContextVisible ? (
+                  <button type="button" className="secondary-button context-toggle-button" onClick={revealContext}>
+                    + Context
+                  </button>
+                ) : (
+                  <span className="prompt-actions-spacer" aria-hidden />
+                )}
+                <button
+                  type="button"
+                  className={`primary-button generate-button ${isGenerating ? "is-stop" : ""}`}
+                  onClick={handleGenerateButtonClick}
+                  disabled={isGenerating ? false : !canGenerate}
+                >
+                  {isGenerating ? "Stop" : "Generate"}
+                </button>
+              </div>
+              <p className="status">{status}</p>
+            </div>
+          </div>
+        </section>
+
+        <section className="editor-layout">
+          <aside className="editor-toolbar-float" aria-label="Editor formatting toolbar">
+            {toolbar}
+          </aside>
+
+          <div className="editor-workspace">
+            <div className="editor-surface">
+              <EditorContent editor={editor} />
+            </div>
+          </div>
+        </section>
+      </div>
     </main>
   );
 }
