@@ -40,7 +40,10 @@ export function tiptapDocToText(doc: TipTapDoc): string {
       case "image": {
         const alt = typeof node.attrs?.alt === "string" ? node.attrs.alt : "";
         const src = typeof node.attrs?.src === "string" ? node.attrs.src : "";
-        const label = [alt, src].filter(Boolean).join(" ");
+        const isDataUrl = src.startsWith("data:");
+        const label = isDataUrl
+          ? (alt.trim() || "embedded image")
+          : [alt, src].filter(Boolean).join(" ");
         lines.push(`[Image: ${label || "untitled"}]`);
         return;
       }

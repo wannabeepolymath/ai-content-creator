@@ -1,8 +1,52 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ChangeEvent, type KeyboardEvent } from "react";
 import { EditorContent, useEditor, type Editor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
-import Image from "@tiptap/extension-image";
+import Highlight from "@tiptap/extension-highlight";
+import Image, { type ImageOptions } from "@tiptap/extension-image";
+import Link from "@tiptap/extension-link";
+import Subscript from "@tiptap/extension-subscript";
+import Superscript from "@tiptap/extension-superscript";
+import TaskItem from "@tiptap/extension-task-item";
+import TaskList from "@tiptap/extension-task-list";
+import TextAlign from "@tiptap/extension-text-align";
+import Underline from "@tiptap/extension-underline";
 import { Table, TableRow, TableHeader, TableCell } from "@tiptap/extension-table";
+import {
+  IconAlignCenter,
+  IconAlignJustify,
+  IconAlignLeft,
+  IconAlignRight,
+  IconBlockquote,
+  IconBold,
+  IconChevronDown,
+  IconClearFormat,
+  IconCodeBlock,
+  IconCodeInline,
+  IconColMinus,
+  IconColPlus,
+  IconExternalLink,
+  IconHighlight,
+  IconHorizontalRule,
+  IconImageAdd,
+  IconItalic,
+  IconLineBreak,
+  IconLink,
+  IconLinkApply,
+  IconListBulleted,
+  IconListNumbered,
+  IconListTask,
+  IconParagraph,
+  IconRedo,
+  IconRowMinus,
+  IconRowPlus,
+  IconStrikethrough,
+  IconSubscript,
+  IconSuperscript,
+  IconTable,
+  IconTrash,
+  IconUnderline,
+  IconUndo,
+} from "./toolbar-icons";
 
 type ContentType = "social" | "blog";
 
@@ -33,7 +77,134 @@ type StreamBlock =
   | { type: "list_item_end" }
   | { type: "image"; src: string; alt?: string };
 
+const MIN_IMAGE_WIDTH = 120;
+
+/** Horizontal drag on image (not resize handles): left = float left, right = float right. Vertical drag: clear float (block). */
+const IMAGE_FLOAT_DRAG_H = 36;
+const IMAGE_FLOAT_DRAG_V = 48;
+
+const ResizableImage = Image.extend({
+  draggable: false,
+
+  addOptions(): ImageOptions {
+    const parent = this.parent?.();
+    return {
+      inline: parent?.inline ?? false,
+      allowBase64: parent?.allowBase64 ?? false,
+      HTMLAttributes: parent?.HTMLAttributes ?? {},
+      resize: {
+        enabled: true,
+        minWidth: MIN_IMAGE_WIDTH,
+        minHeight: 8,
+        alwaysPreserveAspectRatio: true,
+      },
+    };
+  },
+  addAttributes() {
+    return {
+      ...this.parent?.(),
+      width: {
+        default: null,
+        parseHTML: (element) => {
+          const widthAttr = element.getAttribute("width") ?? element.style.width;
+          if (!widthAttr) {
+            return null;
+          }
+          const parsed = Number.parseInt(widthAttr, 10);
+          return Number.isNaN(parsed) ? null : parsed;
+        },
+        renderHTML: (attributes) => {
+          const styles: string[] = [];
+          if (attributes.width) {
+            styles.push(`width: ${attributes.width}px`);
+          }
+          return styles.length ? { style: `${styles.join("; ")};` } : {};
+        },
+      },
+      float: {
+        default: null,
+        parseHTML: (element) => {
+          const floatValue = element.style.cssFloat || element.style.float;
+          return floatValue || null;
+        },
+        renderHTML: () => ({}),
+      },
+    };
+  },
+
+  addNodeView() {
+    const parent = this.parent?.();
+    if (typeof parent !== "function") {
+      return null;
+    }
+    return (props) => {
+      const nodeView = parent(props);
+      const dom = nodeView.dom as HTMLElement;
+      const img = dom.querySelector("img");
+      if (!img) {
+        return nodeView;
+      }
+
+      const applyFloatLayout = (node: (typeof props)["node"]) => {
+        const f = node.attrs.float as string | null | undefined;
+        if (f === "left" || f === "right") {
+          dom.style.float = f;
+          dom.style.display = "block";
+          dom.style.width = "max-content";
+          dom.style.maxWidth = "100%";
+          img.style.float = "none";
+        } else {
+          dom.style.float = "";
+          dom.style.display = "flex";
+          dom.style.width = "";
+          dom.style.maxWidth = "100%";
+          img.style.float = "";
+        }
+      };
+
+      applyFloatLayout(props.node);
+
+      const origUpdate = nodeView.update;
+      if (origUpdate) {
+        nodeView.update = (node, decorations, innerDecorations) => {
+          const ok = origUpdate.call(nodeView, node, decorations, innerDecorations);
+          if (ok) {
+            applyFloatLayout(node);
+          }
+          return ok;
+        };
+      }
+
+      return nodeView;
+    };
+  },
+});
+
 const apiBase = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:4000";
+
+function normalizeLinkHref(raw: string): string {
+  const t = raw.trim();
+  if (!t) {
+    return "";
+  }
+  if (/^https?:\/\//i.test(t) || /^mailto:/i.test(t) || /^tel:/i.test(t)) {
+    return t;
+  }
+  return `https://${t}`;
+}
+
+function restoreLinkSelection(editor: Editor, saved: { from: number; to: number } | null) {
+  if (!saved) {
+    return;
+  }
+  const max = editor.state.doc.content.size;
+  let from = Math.min(Math.max(0, saved.from), max);
+  let to = Math.min(Math.max(0, saved.to), max);
+  if (from > to) {
+    [from, to] = [to, from];
+  }
+  editor.chain().focus().setTextSelection({ from, to }).run();
+}
 
 export function App() {
   const [prompt, setPrompt] = useState("");
@@ -45,6 +216,8 @@ export function App() {
   const [status, setStatus] = useState("Ready.");
   const [abortController, setAbortController] = useState<AbortController | null>(null);
   const [conversationId, setConversationId] = useState<string | null>(null);
+  /** Bumps on every editor transaction so toolbar isActive / can() stay in sync with selection. */
+  const [, setToolbarRevision] = useState(0);
   const draftDocRef = useRef<TipTapDoc>({ type: "doc", content: [] });
   const lastSavedRef = useRef<string>("");
   const draftStateRef = useRef<{
@@ -52,15 +225,51 @@ export function App() {
     activeBlock: "paragraph" | "heading" | "list_item" | null;
     currentList: TipTapNode | null;
   }>({ currentTextNodes: null, activeBlock: null, currentList: null });
+  const imageFileInputRef = useRef<HTMLInputElement>(null);
+  /** Pointer gesture on image body (not resize handles) to set float without toolbar. */
+  const imageFloatGestureRef = useRef<{
+    pointerId: number;
+    startX: number;
+    startY: number;
+    pos: number;
+  } | null>(null);
+  const linkPopoverRef = useRef<HTMLDivElement>(null);
+  const headingMenuRef = useRef<HTMLDivElement>(null);
+  const listMenuRef = useRef<HTMLDivElement>(null);
+  const linkInputRef = useRef<HTMLInputElement>(null);
+  /** Selection when the link popover was opened (URL input steals focus). */
+  const linkSelectionRef = useRef<{ from: number; to: number } | null>(null);
+  const [linkPopoverOpen, setLinkPopoverOpen] = useState(false);
+  const [headingMenuOpen, setHeadingMenuOpen] = useState(false);
+  const [listMenuOpen, setListMenuOpen] = useState(false);
+  const [linkUrlDraft, setLinkUrlDraft] = useState("");
 
   const editor = useEditor({
     extensions: [
-      StarterKit,
-      Image,
+      StarterKit.configure({
+        heading: { levels: [1, 2, 3, 4] },
+      }),
+      Underline,
+      Subscript,
+      Superscript,
+      Link.configure({
+        openOnClick: true,
+        autolink: true,
+        linkOnPaste: true,
+        HTMLAttributes: {
+          target: "_blank",
+          rel: "noopener noreferrer",
+        },
+      }),
+      Highlight,
+      TextAlign.configure({ types: ["heading", "paragraph"] }),
+      ResizableImage.configure({ allowBase64: true }),
       Table.configure({ resizable: true }),
       TableRow,
       TableHeader,
       TableCell,
+      TaskList,
+      TaskItem.configure({ nested: true }),
     ],
     content: {
       type: "doc",
@@ -81,6 +290,25 @@ export function App() {
     () => !isGenerating && !isSaving && !!editor && isDirty,
     [isGenerating, isSaving, editor, isDirty],
   );
+  const canUndo = editor ? editor.can().chain().focus().undo().run() : false;
+  const canRedo = editor ? editor.can().chain().focus().redo().run() : false;
+  const canInsertTable = editor
+    ? editor.can().chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()
+    : false;
+  const canAddRow = editor ? editor.can().chain().focus().addRowAfter().run() : false;
+  const canDeleteRow = editor ? editor.can().chain().focus().deleteRow().run() : false;
+  const canAddColumn = editor ? editor.can().chain().focus().addColumnAfter().run() : false;
+  const canDeleteColumn = editor ? editor.can().chain().focus().deleteColumn().run() : false;
+  const canDeleteTable = editor ? editor.can().chain().focus().deleteTable().run() : false;
+  const isLinkActive = editor ? editor.isActive("link") : false;
+  const canToggleBold = editor ? editor.can().chain().focus().toggleBold().run() : false;
+  const canToggleItalic = editor ? editor.can().chain().focus().toggleItalic().run() : false;
+  const canToggleUnderline = editor ? editor.can().chain().focus().toggleUnderline().run() : false;
+  const canToggleStrike = editor ? editor.can().chain().focus().toggleStrike().run() : false;
+  const canToggleCode = editor ? editor.can().chain().focus().toggleCode().run() : false;
+  const canToggleSuperscript = editor ? editor.can().chain().focus().toggleSuperscript().run() : false;
+  const canToggleSubscript = editor ? editor.can().chain().focus().toggleSubscript().run() : false;
+  const headingLevels = [1, 2, 3, 4] as const;
 
   function getEditorSnapshot(editorInstance: Editor) {
     return JSON.stringify(editorInstance.getJSON());
@@ -112,6 +340,163 @@ export function App() {
       editor.off("update", handleUpdate);
     };
   }, [editor]);
+
+  useEffect(() => {
+    if (!editor) {
+      return;
+    }
+    const refreshToolbar = () => {
+      setToolbarRevision((n) => n + 1);
+    };
+    editor.on("transaction", refreshToolbar);
+    return () => {
+      editor.off("transaction", refreshToolbar);
+    };
+  }, [editor]);
+
+  useEffect(() => {
+    if (!editor) {
+      return;
+    }
+    const dom = editor.view.dom;
+    function onPointerDownCapture(event: PointerEvent) {
+      if ((event.target as HTMLElement).closest("[data-resize-handle]")) {
+        imageFloatGestureRef.current = null;
+      }
+    }
+    function onPointerDown(event: PointerEvent) {
+      if (event.button !== 0) {
+        return;
+      }
+      const target = event.target as HTMLElement;
+      if (target.closest("[data-resize-handle]")) {
+        return;
+      }
+      const container = target.closest("[data-resize-container]");
+      if (!container || !dom.contains(container)) {
+        return;
+      }
+      let pos: number;
+      try {
+        pos = editor.view.posAtDOM(container as Node, 0);
+      } catch {
+        return;
+      }
+      if (pos < 0) {
+        return;
+      }
+      const $pos = editor.state.doc.resolve(pos);
+      const node = $pos.nodeAfter;
+      if (!node || node.type.name !== "image") {
+        return;
+      }
+      imageFloatGestureRef.current = {
+        pointerId: event.pointerId,
+        startX: event.clientX,
+        startY: event.clientY,
+        pos,
+      };
+    }
+    function onPointerUp(event: PointerEvent) {
+      const g = imageFloatGestureRef.current;
+      if (!g || g.pointerId !== event.pointerId) {
+        return;
+      }
+      imageFloatGestureRef.current = null;
+      const dx = event.clientX - g.startX;
+      const dy = event.clientY - g.startY;
+      const horizontal = Math.abs(dx) > Math.abs(dy) && Math.abs(dx) >= IMAGE_FLOAT_DRAG_H;
+      const verticalClear = Math.abs(dy) > Math.abs(dx) && Math.abs(dy) >= IMAGE_FLOAT_DRAG_V && Math.abs(dx) <= 20;
+      if (horizontal) {
+        editor.chain().focus().setNodeSelection(g.pos).updateAttributes("image", { float: dx > 0 ? "right" : "left" }).run();
+      } else if (verticalClear) {
+        editor.chain().focus().setNodeSelection(g.pos).updateAttributes("image", { float: null }).run();
+      }
+    }
+    document.addEventListener("pointerdown", onPointerDownCapture, true);
+    dom.addEventListener("pointerdown", onPointerDown);
+    document.addEventListener("pointerup", onPointerUp);
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDownCapture, true);
+      dom.removeEventListener("pointerdown", onPointerDown);
+      document.removeEventListener("pointerup", onPointerUp);
+    };
+  }, [editor]);
+
+  useEffect(() => {
+    if (!linkPopoverOpen) {
+      return;
+    }
+    const id = requestAnimationFrame(() => {
+      linkInputRef.current?.focus();
+      linkInputRef.current?.select();
+    });
+    return () => cancelAnimationFrame(id);
+  }, [linkPopoverOpen]);
+
+  useEffect(() => {
+    if (!linkPopoverOpen) {
+      return;
+    }
+    function handlePointerDown(event: PointerEvent) {
+      const el = linkPopoverRef.current;
+      if (!el || el.contains(event.target as Node)) {
+        return;
+      }
+      linkSelectionRef.current = null;
+      setLinkPopoverOpen(false);
+    }
+    document.addEventListener("pointerdown", handlePointerDown);
+    return () => document.removeEventListener("pointerdown", handlePointerDown);
+  }, [linkPopoverOpen]);
+
+  useEffect(() => {
+    if (!headingMenuOpen) {
+      return;
+    }
+    function handlePointerDown(event: PointerEvent) {
+      const el = headingMenuRef.current;
+      if (!el || el.contains(event.target as Node)) {
+        return;
+      }
+      setHeadingMenuOpen(false);
+    }
+    function handleKeyDown(event: globalThis.KeyboardEvent) {
+      if (event.key === "Escape") {
+        setHeadingMenuOpen(false);
+      }
+    }
+    document.addEventListener("pointerdown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [headingMenuOpen]);
+
+  useEffect(() => {
+    if (!listMenuOpen) {
+      return;
+    }
+    function handlePointerDown(event: PointerEvent) {
+      const el = listMenuRef.current;
+      if (!el || el.contains(event.target as Node)) {
+        return;
+      }
+      setListMenuOpen(false);
+    }
+    function handleKeyDown(event: globalThis.KeyboardEvent) {
+      if (event.key === "Escape") {
+        setListMenuOpen(false);
+      }
+    }
+    document.addEventListener("pointerdown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [listMenuOpen]);
 
   async function saveSnapshot(options: {
     silent?: boolean;
@@ -248,7 +633,10 @@ export function App() {
         draftStateRef.current.activeBlock = null;
         break;
       case "image":
-        draftDocRef.current.content.push({ type: "image", attrs: { src: block.src, alt: block.alt ?? "" } });
+        draftDocRef.current.content.push({
+          type: "image",
+          attrs: { src: block.src, alt: block.alt ?? "", float: "left" },
+        });
         draftStateRef.current.currentTextNodes = null;
         draftStateRef.current.activeBlock = null;
         break;
@@ -417,6 +805,115 @@ export function App() {
     abortController?.abort();
   }
 
+  function toggleLinkPopover() {
+    if (!editor) {
+      return;
+    }
+    setLinkPopoverOpen((open) => {
+      if (open) {
+        return false;
+      }
+      const { from, to } = editor.state.selection;
+      linkSelectionRef.current = { from, to };
+      const href = editor.getAttributes("link").href as string | undefined;
+      setLinkUrlDraft(href ?? "");
+      return true;
+    });
+  }
+
+  function applyLinkFromPopover() {
+    if (!editor) {
+      return;
+    }
+    restoreLinkSelection(editor, linkSelectionRef.current);
+    const trimmed = linkUrlDraft.trim();
+    const { from, to } = editor.state.selection;
+    const hasTextSelection = from !== to;
+
+    if (!trimmed) {
+      editor.chain().focus().extendMarkRange("link").unsetLink().run();
+      linkSelectionRef.current = null;
+      setLinkPopoverOpen(false);
+      return;
+    }
+
+    const href = normalizeLinkHref(trimmed);
+    if (hasTextSelection) {
+      editor.chain().focus().setLink({ href }).run();
+    } else if (editor.isActive("link")) {
+      editor.chain().focus().extendMarkRange("link").setLink({ href }).run();
+    } else {
+      editor.chain().focus().insertContent(trimmed).run();
+    }
+    linkSelectionRef.current = null;
+    setLinkPopoverOpen(false);
+  }
+
+  function openLinkFromPopover() {
+    if (!editor) {
+      return;
+    }
+    const draft = linkUrlDraft.trim();
+    const fromMark = editor.getAttributes("link").href as string | undefined;
+    const raw = draft || fromMark;
+    if (!raw) {
+      return;
+    }
+    window.open(normalizeLinkHref(raw), "_blank", "noopener,noreferrer");
+  }
+
+  function clearLinkFromPopover() {
+    if (!editor) {
+      return;
+    }
+    restoreLinkSelection(editor, linkSelectionRef.current);
+    setLinkUrlDraft("");
+    editor.chain().focus().extendMarkRange("link").unsetLink().run();
+    linkSelectionRef.current = null;
+  }
+
+  function handleLinkInputKeyDown(event: KeyboardEvent<HTMLInputElement>) {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      applyLinkFromPopover();
+    }
+    if (event.key === "Escape") {
+      event.preventDefault();
+      linkSelectionRef.current = null;
+      setLinkPopoverOpen(false);
+    }
+  }
+
+  function openImageFilePicker() {
+    imageFileInputRef.current?.click();
+  }
+
+  function handleImageFileSelected(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!editor || !file) {
+      return;
+    }
+    if (!file.type.startsWith("image/")) {
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = reader.result;
+      if (typeof result !== "string") {
+        return;
+      }
+      const baseName = file.name.replace(/\.[^.]+$/, "");
+      const alt = baseName.replace(/[-_]/g, " ").trim() || "Uploaded image";
+      editor.chain().focus().insertContent({ type: "image", attrs: { src: result, alt, float: "left" } }).run();
+    };
+    reader.readAsDataURL(file);
+  }
+
+  function insertTable() {
+    editor?.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run();
+  }
+
   return (
     <main className="app">
       <section className="controls">
@@ -465,6 +962,425 @@ export function App() {
 
       <section className="editor-shell">
         <div className="editor-header">
+          <div className="editor-toolbar">
+            <div className="toolbar-group">
+              <button
+                type="button"
+                className="toolbar-button"
+                onClick={() => editor?.chain().focus().undo().run()}
+                disabled={!canUndo}
+                title="Undo"
+              >
+                <IconUndo />
+              </button>
+              <button
+                type="button"
+                className="toolbar-button"
+                onClick={() => editor?.chain().focus().redo().run()}
+                disabled={!canRedo}
+                title="Redo"
+              >
+                <IconRedo />
+              </button>
+            </div>
+
+            <div className="toolbar-group">
+              <button
+                type="button"
+                className={`toolbar-button ${editor?.isActive("paragraph") ? "is-active" : ""}`}
+                onClick={() => editor?.chain().focus().setParagraph().run()}
+                title="Paragraph"
+              >
+                <IconParagraph />
+              </button>
+              <div className="toolbar-heading-wrap" ref={headingMenuRef}>
+                <button
+                  type="button"
+                  className={`toolbar-button toolbar-heading-trigger ${editor?.isActive("heading") || headingMenuOpen ? "is-active" : ""}`}
+                  onClick={() => {
+                    setListMenuOpen(false);
+                    setHeadingMenuOpen((open) => !open);
+                  }}
+                  title="Headings"
+                  aria-expanded={headingMenuOpen}
+                  aria-haspopup="listbox"
+                >
+                  <span className="toolbar-heading-trigger-inner" aria-hidden>
+                    <span className="toolbar-heading-trigger-h">H</span>
+                    <IconChevronDown className="toolbar-icon toolbar-heading-chevron" />
+                  </span>
+                </button>
+                {headingMenuOpen ? (
+                  <div className="heading-dropdown" role="listbox" aria-label="Heading level">
+                    {headingLevels.map((level) => (
+                      <button
+                        key={level}
+                        type="button"
+                        role="option"
+                        aria-selected={editor?.isActive("heading", { level })}
+                        className={`heading-dropdown-item ${editor?.isActive("heading", { level }) ? "is-active" : ""}`}
+                        onClick={() => {
+                          editor?.chain().focus().toggleHeading({ level }).run();
+                          setHeadingMenuOpen(false);
+                        }}
+                      >
+                        <span className={`heading-dropdown-badge heading-dropdown-badge--${level}`} aria-hidden>
+                          H
+                          <sub>{level}</sub>
+                        </span>
+                        <span className="heading-dropdown-label">Heading {level}</span>
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+              <button
+                type="button"
+                className={`toolbar-button ${editor?.isActive("blockquote") ? "is-active" : ""}`}
+                onClick={() => editor?.chain().focus().toggleBlockquote().run()}
+                title="Blockquote"
+              >
+                <IconBlockquote />
+              </button>
+            </div>
+
+            <div className="toolbar-group">
+              <div className="toolbar-list-wrap" ref={listMenuRef}>
+                <button
+                  type="button"
+                  className={`toolbar-button toolbar-list-trigger ${editor?.isActive("bulletList") || editor?.isActive("orderedList") || editor?.isActive("taskList") || listMenuOpen ? "is-active" : ""}`}
+                  onClick={() => {
+                    setHeadingMenuOpen(false);
+                    setListMenuOpen((open) => !open);
+                  }}
+                  title="Lists"
+                  aria-expanded={listMenuOpen}
+                  aria-haspopup="listbox"
+                >
+                  <span className="toolbar-list-trigger-inner" aria-hidden>
+                    <IconListBulleted />
+                    <IconChevronDown className="toolbar-icon toolbar-list-chevron" />
+                  </span>
+                </button>
+                {listMenuOpen ? (
+                  <div className="list-dropdown" role="listbox" aria-label="List type">
+                    <button
+                      type="button"
+                      role="option"
+                      aria-selected={editor?.isActive("bulletList")}
+                      className={`list-dropdown-item ${editor?.isActive("bulletList") ? "is-active" : ""}`}
+                      onClick={() => {
+                        editor?.chain().focus().toggleBulletList().run();
+                        setListMenuOpen(false);
+                      }}
+                    >
+                      <span className="list-dropdown-item-icon">
+                        <IconListBulleted />
+                      </span>
+                      <span className="list-dropdown-item-label">Bullet list</span>
+                    </button>
+                    <button
+                      type="button"
+                      role="option"
+                      aria-selected={editor?.isActive("orderedList")}
+                      className={`list-dropdown-item ${editor?.isActive("orderedList") ? "is-active" : ""}`}
+                      onClick={() => {
+                        editor?.chain().focus().toggleOrderedList().run();
+                        setListMenuOpen(false);
+                      }}
+                    >
+                      <span className="list-dropdown-item-icon">
+                        <IconListNumbered />
+                      </span>
+                      <span className="list-dropdown-item-label">Ordered list</span>
+                    </button>
+                    <button
+                      type="button"
+                      role="option"
+                      aria-selected={editor?.isActive("taskList")}
+                      className={`list-dropdown-item ${editor?.isActive("taskList") ? "is-active" : ""}`}
+                      onClick={() => {
+                        editor?.chain().focus().toggleTaskList().run();
+                        setListMenuOpen(false);
+                      }}
+                    >
+                      <span className="list-dropdown-item-icon">
+                        <IconListTask />
+                      </span>
+                      <span className="list-dropdown-item-label">Task list</span>
+                    </button>
+                  </div>
+                ) : null}
+              </div>
+            </div>
+
+            <div className="toolbar-group">
+              <button
+                type="button"
+                className={`toolbar-button ${editor?.isActive("bold") ? "is-active" : ""}`}
+                onClick={() => editor?.chain().focus().toggleBold().run()}
+                disabled={!canToggleBold}
+                title="Bold"
+              >
+                <IconBold />
+              </button>
+              <button
+                type="button"
+                className={`toolbar-button ${editor?.isActive("italic") ? "is-active" : ""}`}
+                onClick={() => editor?.chain().focus().toggleItalic().run()}
+                disabled={!canToggleItalic}
+                title="Italic"
+              >
+                <IconItalic />
+              </button>
+              <button
+                type="button"
+                className={`toolbar-button ${editor?.isActive("underline") ? "is-active" : ""}`}
+                onClick={() => editor?.chain().focus().toggleUnderline().run()}
+                disabled={!canToggleUnderline}
+                title="Underline"
+              >
+                <IconUnderline />
+              </button>
+              <button
+                type="button"
+                className={`toolbar-button ${editor?.isActive("strike") ? "is-active" : ""}`}
+                onClick={() => editor?.chain().focus().toggleStrike().run()}
+                disabled={!canToggleStrike}
+                title="Strikethrough"
+              >
+                <IconStrikethrough />
+              </button>
+              <button
+                type="button"
+                className={`toolbar-button ${editor?.isActive("code") ? "is-active" : ""}`}
+                onClick={() => editor?.chain().focus().toggleCode().run()}
+                disabled={!canToggleCode}
+                title="Inline code"
+              >
+                <IconCodeInline />
+              </button>
+              <button
+                type="button"
+                className={`toolbar-button ${editor?.isActive("highlight") ? "is-active" : ""}`}
+                onClick={() => editor?.chain().focus().toggleHighlight().run()}
+                title="Highlight"
+              >
+                <IconHighlight />
+              </button>
+              <button
+                type="button"
+                className={`toolbar-button ${editor?.isActive("superscript") ? "is-active" : ""}`}
+                onClick={() => editor?.chain().focus().toggleSuperscript().run()}
+                disabled={!canToggleSuperscript}
+                title="Superscript"
+              >
+                <IconSuperscript />
+              </button>
+              <button
+                type="button"
+                className={`toolbar-button ${editor?.isActive("subscript") ? "is-active" : ""}`}
+                onClick={() => editor?.chain().focus().toggleSubscript().run()}
+                disabled={!canToggleSubscript}
+                title="Subscript"
+              >
+                <IconSubscript />
+              </button>
+            </div>
+
+            <div className="toolbar-group">
+              <button
+                type="button"
+                className={`toolbar-button ${editor?.isActive({ textAlign: "left" }) ? "is-active" : ""}`}
+                onClick={() => editor?.chain().focus().setTextAlign("left").run()}
+                title="Align left"
+              >
+                <IconAlignLeft />
+              </button>
+              <button
+                type="button"
+                className={`toolbar-button ${editor?.isActive({ textAlign: "center" }) ? "is-active" : ""}`}
+                onClick={() => editor?.chain().focus().setTextAlign("center").run()}
+                title="Align center"
+              >
+                <IconAlignCenter />
+              </button>
+              <button
+                type="button"
+                className={`toolbar-button ${editor?.isActive({ textAlign: "right" }) ? "is-active" : ""}`}
+                onClick={() => editor?.chain().focus().setTextAlign("right").run()}
+                title="Align right"
+              >
+                <IconAlignRight />
+              </button>
+              <button
+                type="button"
+                className={`toolbar-button ${editor?.isActive({ textAlign: "justify" }) ? "is-active" : ""}`}
+                onClick={() => editor?.chain().focus().setTextAlign("justify").run()}
+                title="Justify"
+              >
+                <IconAlignJustify />
+              </button>
+            </div>
+
+            <div className="toolbar-group">
+              <div className="toolbar-link-wrap" ref={linkPopoverRef}>
+                <button
+                  type="button"
+                  className={`toolbar-button ${isLinkActive || linkPopoverOpen ? "is-active" : ""}`}
+                  onMouseDown={(event) => {
+                    if (!editor || linkPopoverOpen) {
+                      return;
+                    }
+                    if (event.button !== 0) {
+                      return;
+                    }
+                    const { from, to } = editor.state.selection;
+                    linkSelectionRef.current = { from, to };
+                  }}
+                  onClick={toggleLinkPopover}
+                  title="Link"
+                  aria-expanded={linkPopoverOpen}
+                  aria-haspopup="dialog"
+                >
+                  <IconLink />
+                </button>
+                {linkPopoverOpen ? (
+                  <div className="link-popover" role="dialog" aria-label="Edit link">
+                    <input
+                      ref={linkInputRef}
+                      type="url"
+                      className="link-popover-input"
+                      placeholder="Paste a link..."
+                      value={linkUrlDraft}
+                      onChange={(event) => setLinkUrlDraft(event.target.value)}
+                      onKeyDown={handleLinkInputKeyDown}
+                    />
+                    <span className="link-popover-divider" aria-hidden />
+                    <div className="link-popover-actions">
+                      <button type="button" className="link-popover-icon-btn" onClick={applyLinkFromPopover} title="Apply link">
+                        <IconLinkApply className="toolbar-icon" />
+                      </button>
+                      <button
+                        type="button"
+                        className="link-popover-icon-btn"
+                        onClick={openLinkFromPopover}
+                        disabled={!linkUrlDraft.trim() && !isLinkActive}
+                        title="Open in new tab"
+                      >
+                        <IconExternalLink className="toolbar-icon" />
+                      </button>
+                      <button type="button" className="link-popover-icon-btn" onClick={clearLinkFromPopover} title="Remove link">
+                        <IconTrash className="toolbar-icon" />
+                      </button>
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+              <button type="button" className="toolbar-button" onClick={openImageFilePicker} title="Insert image from file">
+                <IconImageAdd />
+              </button>
+              <button
+                type="button"
+                className={`toolbar-button ${editor?.isActive("codeBlock") ? "is-active" : ""}`}
+                onClick={() => editor?.chain().focus().toggleCodeBlock().run()}
+                title="Code block"
+              >
+                <IconCodeBlock />
+              </button>
+              <button
+                type="button"
+                className="toolbar-button"
+                onClick={() => editor?.chain().focus().setHorizontalRule().run()}
+                title="Horizontal rule"
+              >
+                <IconHorizontalRule />
+              </button>
+              <button
+                type="button"
+                className="toolbar-button"
+                onClick={() => editor?.chain().focus().setHardBreak().run()}
+                title="Line break"
+              >
+                <IconLineBreak />
+              </button>
+              <button
+                type="button"
+                className="toolbar-button"
+                onClick={() => editor?.chain().focus().unsetAllMarks().clearNodes().run()}
+                title="Clear formatting"
+              >
+                <IconClearFormat />
+              </button>
+            </div>
+
+            <div className="toolbar-group">
+              <button
+                type="button"
+                className="toolbar-button"
+                onClick={insertTable}
+                disabled={!canInsertTable}
+                title="Insert table"
+              >
+                <IconTable />
+              </button>
+              <button
+                type="button"
+                className="toolbar-button"
+                onClick={() => editor?.chain().focus().addRowAfter().run()}
+                disabled={!canAddRow}
+                title="Add row"
+              >
+                <IconRowPlus />
+              </button>
+              <button
+                type="button"
+                className="toolbar-button"
+                onClick={() => editor?.chain().focus().deleteRow().run()}
+                disabled={!canDeleteRow}
+                title="Delete row"
+              >
+                <IconRowMinus />
+              </button>
+              <button
+                type="button"
+                className="toolbar-button"
+                onClick={() => editor?.chain().focus().addColumnAfter().run()}
+                disabled={!canAddColumn}
+                title="Add column"
+              >
+                <IconColPlus />
+              </button>
+              <button
+                type="button"
+                className="toolbar-button"
+                onClick={() => editor?.chain().focus().deleteColumn().run()}
+                disabled={!canDeleteColumn}
+                title="Delete column"
+              >
+                <IconColMinus />
+              </button>
+              <button
+                type="button"
+                className="toolbar-button"
+                onClick={() => editor?.chain().focus().deleteTable().run()}
+                disabled={!canDeleteTable}
+                title="Delete table"
+              >
+                <IconTrash />
+              </button>
+            </div>
+          </div>
+          <input
+            ref={imageFileInputRef}
+            type="file"
+            className="visually-hidden"
+            accept="image/*"
+            aria-hidden
+            tabIndex={-1}
+            onChange={handleImageFileSelected}
+          />
+
           <button className="save-button" onClick={() => void saveSnapshot()} disabled={!canSave}>
             Save
           </button>
@@ -474,7 +1390,3 @@ export function App() {
     </main>
   );
 }
-
-
-
-//issue: the change done in editor are not saved anywhere as well as the data in editor is not been sent to the server
