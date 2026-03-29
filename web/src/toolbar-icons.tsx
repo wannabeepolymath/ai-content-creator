@@ -61,11 +61,14 @@ export function IconChevronDown(props: SVGProps<SVGSVGElement>) {
   );
 }
 
+/** Bootstrap Icons `bi-quote` (MIT) — opening pair only. */
+const BI_QUOTE =
+  "M12 12a1 1 0 0 0 1-1V8.558a1 1 0 0 0-1-1h-1.388q0-.527.062-1.054.093-.558.31-.992t.559-.683q.34-.279.868-.279V3q-.868 0-1.52.372a3.3 3.3 0 0 0-1.085.992 4.9 4.9 0 0 0-.62 1.458A7.7 7.7 0 0 0 9 7.558V11a1 1 0 0 0 1 1zm-6 0a1 1 0 0 0 1-1V8.558a1 1 0 0 0-1-1H4.612q0-.527.062-1.054.094-.558.31-.992.217-.434.559-.683.34-.279.868-.279V3q-.868 0-1.52.372a3.3 3.3 0 0 0-1.085.992 4.9 4.9 0 0 0-.62 1.458A7.7 7.7 0 0 0 3 7.558V11a1 1 0 0 0 1 1z";
+
 export function IconBlockquote(props: SVGProps<SVGSVGElement>) {
   return (
-    <svg {...base} {...props}>
-      <path d="M16 3a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2 2 2 0 0 0 2-2V5a2 2 0 0 0-2-2z" />
-      <path d="M8 3a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2 2 2 0 0 0 2-2V5a2 2 0 0 0-2-2z" />
+    <svg {...base} {...props} viewBox="0 0 16 16" fill="currentColor" stroke="none">
+      <path d={BI_QUOTE} />
     </svg>
   );
 }
@@ -156,13 +159,24 @@ export function IconCodeInline(props: SVGProps<SVGSVGElement>) {
   );
 }
 
+/** Bootstrap Icons `bi-highlighter` (MIT). */
 export function IconHighlight(props: SVGProps<SVGSVGElement>) {
   return (
-    <svg {...base} {...props}>
-      <path d="m9 11-6 6v3h3l6-6" />
-      <path d="m15 5 3 3" />
-      <path d="M12 8 4 16v4" />
-      <path d="M21 3 12 12" />
+    <svg {...base} {...props} viewBox="0 0 16 16" fill="currentColor" stroke="none">
+      <path
+        fillRule="evenodd"
+        d="M11.096.644a2 2 0 0 1 2.791.036l1.433 1.433a2 2 0 0 1 .035 2.791l-.413.435-8.07 8.995a.5.5 0 0 1-.372.166h-3a.5.5 0 0 1-.234-.058l-.412.412A.5.5 0 0 1 2.5 15h-2a.5.5 0 0 1-.354-.854l1.412-1.412A.5.5 0 0 1 1.5 12.5v-3a.5.5 0 0 1 .166-.372l8.995-8.07zm-.115 1.47L2.727 9.52l3.753 3.753 7.406-8.254zm3.585 2.17.064-.068a1 1 0 0 0-.017-1.396L13.18 1.387a1 1 0 0 0-1.396-.018l-.068.065zM5.293 13.5 2.5 10.707v1.586L3.707 13.5z"
+      />
+    </svg>
+  );
+}
+
+/** Prohibited / none — remove highlight (toolbar dropdown). */
+export function IconHighlightNone(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg {...base} {...props} viewBox="0 0 24 24">
+      <circle cx="12" cy="12" r="9" />
+      <path d="M7.5 7.5l9 9" />
     </svg>
   );
 }
@@ -288,13 +302,12 @@ export function IconImageAdd(props: SVGProps<SVGSVGElement>) {
   );
 }
 
+/** Bootstrap Icons `bi-code-square` (MIT). */
 export function IconCodeBlock(props: SVGProps<SVGSVGElement>) {
   return (
-    <svg {...base} {...props}>
-      <path d="M4 9h16" />
-      <path d="M4 15h16" />
-      <path d="M8 5v14" />
-      <path d="M16 5v14" />
+    <svg {...base} {...props} viewBox="0 0 16 16" fill="currentColor" stroke="none">
+      <path d="M14 1a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H2a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1zM2 0a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V2a2 2 0 0 0-2-2z" />
+      <path d="M6.854 4.646a.5.5 0 0 1 0 .708L4.207 8l2.647 2.646a.5.5 0 0 1-.708.708l-3-3a.5.5 0 0 1 0-.708l3-3a.5.5 0 0 1 .708 0m2.292 0a.5.5 0 0 0 0 .708L11.793 8l-2.647 2.646a.5.5 0 0 0 .708.708l3-3a.5.5 0 0 0 0-.708l-3-3a.5.5 0 0 0-.708 0" />
     </svg>
   );
 }

@@ -180,7 +180,8 @@ button:disabled {
 }
 
 .toolbar-heading-wrap,
-.toolbar-list-wrap {
+.toolbar-list-wrap,
+.toolbar-highlight-wrap {
   position: relative;
   display: inline-flex;
   align-items: center;
@@ -231,6 +232,103 @@ button:disabled {
   width: 14px;
   height: 14px;
   opacity: 0.85;
+}
+
+.toolbar-highlight-trigger {
+  gap: 2px;
+  padding-left: 5px;
+  padding-right: 5px;
+}
+
+.toolbar-highlight-trigger-inner {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.toolbar-highlight-chevron {
+  width: 14px;
+  height: 14px;
+  opacity: 0.85;
+}
+
+.highlight-dropdown {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  background: #ffffff;
+  box-shadow: 0 10px 40px rgba(15, 23, 42, 0.12);
+}
+
+.highlight-dropdown-swatches {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.highlight-swatch {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 2px solid rgba(15, 23, 42, 0.08);
+  padding: 0;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition:
+    transform 0.1s ease,
+    border-color 0.1s ease;
+}
+
+.highlight-swatch:hover {
+  transform: scale(1.05);
+  border-color: rgba(15, 23, 42, 0.2);
+}
+
+.highlight-swatch.is-active {
+  border-color: #64748b;
+  box-shadow: 0 0 0 1px rgba(100, 116, 139, 0.35);
+}
+
+.highlight-dropdown-divider {
+  width: 1px;
+  align-self: stretch;
+  min-height: 28px;
+  background: #e2e8f0;
+  flex-shrink: 0;
+}
+
+.highlight-dropdown-clear {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  margin: 0;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #475569;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.highlight-dropdown-clear:hover:not(:disabled) {
+  background: #f1f5f9;
+  border-color: #cbd5e1;
+}
+
+.highlight-dropdown-clear:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
 }
 
 .heading-dropdown,
@@ -467,8 +565,13 @@ button:disabled {
   color: #2563eb;
 }
 
-.editor-content mark {
+/* Default highlight only when not using multicolor (TipTap sets data-color + inline style). */
+.editor-content mark:not([data-color]) {
   background: #fde68a;
+  padding: 0 2px;
+}
+
+.editor-content mark[data-color] {
   padding: 0 2px;
 }
 

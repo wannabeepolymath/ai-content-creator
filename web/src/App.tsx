@@ -26,6 +26,7 @@ import {
   IconColPlus,
   IconExternalLink,
   IconHighlight,
+  IconHighlightNone,
   IconHorizontalRule,
   IconImageAdd,
   IconItalic,
@@ -182,6 +183,15 @@ const ResizableImage = Image.extend({
 
 const apiBase = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:4000";
 
+/** Pastel highlighter colors (TipTap multicolor highlight). */
+const HIGHLIGHT_COLORS = [
+  { label: "Green", color: "#bbf7d0" },
+  { label: "Blue", color: "#bfdbfe" },
+  { label: "Pink", color: "#fbcfe8" },
+  { label: "Purple", color: "#e9d5ff" },
+  { label: "Yellow", color: "#fef08a" },
+] as const;
+
 function normalizeLinkHref(raw: string): string {
   const t = raw.trim();
   if (!t) {
@@ -235,12 +245,16 @@ export function App() {
   } | null>(null);
   const linkPopoverRef = useRef<HTMLDivElement>(null);
   const headingMenuRef = useRef<HTMLDivElement>(null);
+  const highlightMenuRef = useRef<HTMLDivElement>(null);
   const listMenuRef = useRef<HTMLDivElement>(null);
   const linkInputRef = useRef<HTMLInputElement>(null);
   /** Selection when the link popover was opened (URL input steals focus). */
   const linkSelectionRef = useRef<{ from: number; to: number } | null>(null);
+  /** Selection when the highlight menu was opened (toolbar click blurs the editor). */
+  const highlightSelectionRef = useRef<{ from: number; to: number } | null>(null);
   const [linkPopoverOpen, setLinkPopoverOpen] = useState(false);
   const [headingMenuOpen, setHeadingMenuOpen] = useState(false);
+  const [highlightMenuOpen, setHighlightMenuOpen] = useState(false);
   const [listMenuOpen, setListMenuOpen] = useState(false);
   const [linkUrlDraft, setLinkUrlDraft] = useState("");
 
@@ -261,7 +275,7 @@ export function App() {
           rel: "noopener noreferrer",
         },
       }),
-      Highlight,
+      Highlight.configure({ multicolor: true }),
       TextAlign.configure({ types: ["heading", "paragraph"] }),
       ResizableImage.configure({ allowBase64: true }),
       Table.configure({ resizable: true }),
@@ -473,6 +487,30 @@ export function App() {
       document.removeEventListener("keydown", handleKeyDown);
     };
   }, [headingMenuOpen]);
+
+  useEffect(() => {
+    if (!highlightMenuOpen) {
+      return;
+    }
+    function handlePointerDown(event: PointerEvent) {
+      const el = highlightMenuRef.current;
+      if (!el || el.contains(event.target as Node)) {
+        return;
+      }
+      setHighlightMenuOpen(false);
+    }
+    function handleKeyDown(event: globalThis.KeyboardEvent) {
+      if (event.key === "Escape") {
+        setHighlightMenuOpen(false);
+      }
+    }
+    document.addEventListener("pointerdown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [highlightMenuOpen]);
 
   useEffect(() => {
     if (!listMenuOpen) {
@@ -1160,14 +1198,79 @@ export function App() {
               >
                 <IconCodeInline />
               </button>
-              <button
-                type="button"
-                className={`toolbar-button ${editor?.isActive("highlight") ? "is-active" : ""}`}
-                onClick={() => editor?.chain().focus().toggleHighlight().run()}
-                title="Highlight"
-              >
-                <IconHighlight />
-              </button>
+              <div className="toolbar-highlight-wrap" ref={highlightMenuRef}>
+                <button
+                  type="button"
+                  className={`toolbar-button toolbar-highlight-trigger ${editor?.isActive("highlight") || highlightMenuOpen ? "is-active" : ""}`}
+                  onMouseDown={(event) => {
+                    if (!editor || event.button !== 0) {
+                      return;
+                    }
+                    event.preventDefault();
+                    const { from, to } = editor.state.selection;
+                    highlightSelectionRef.current = { from, to };
+                  }}
+                  onClick={() => setHighlightMenuOpen((open) => !open)}
+                  title="Highlight"
+                  aria-expanded={highlightMenuOpen}
+                  aria-haspopup="listbox"
+                  aria-label="Highlight"
+                >
+                  <span className="toolbar-highlight-trigger-inner" aria-hidden>
+                    <IconHighlight />
+                    <IconChevronDown className="toolbar-icon toolbar-highlight-chevron" />
+                  </span>
+                </button>
+                {highlightMenuOpen ? (
+                  <div className="highlight-dropdown" role="listbox" aria-label="Highlight color">
+                    <div className="highlight-dropdown-swatches" role="presentation">
+                      {HIGHLIGHT_COLORS.map(({ label, color }) => (
+                        <button
+                          key={color}
+                          type="button"
+                          role="option"
+                          aria-selected={editor?.isActive("highlight", { color })}
+                          className={`highlight-swatch ${editor?.isActive("highlight", { color }) ? "is-active" : ""}`}
+                          style={{ backgroundColor: color }}
+                          title={label}
+                          onMouseDown={(event) => {
+                            event.preventDefault();
+                          }}
+                          onClick={() => {
+                            if (!editor) {
+                              return;
+                            }
+                            restoreLinkSelection(editor, highlightSelectionRef.current);
+                            editor.chain().focus().setHighlight({ color }).run();
+                            highlightSelectionRef.current = null;
+                            setHighlightMenuOpen(false);
+                          }}
+                        />
+                      ))}
+                    </div>
+                    <span className="highlight-dropdown-divider" aria-hidden />
+                    <button
+                      type="button"
+                      className="highlight-dropdown-clear"
+                      title="Remove highlight"
+                      onMouseDown={(event) => {
+                        event.preventDefault();
+                      }}
+                      onClick={() => {
+                        if (!editor) {
+                          return;
+                        }
+                        restoreLinkSelection(editor, highlightSelectionRef.current);
+                        editor.chain().focus().unsetHighlight().run();
+                        highlightSelectionRef.current = null;
+                        setHighlightMenuOpen(false);
+                      }}
+                    >
+                      <IconHighlightNone className="toolbar-icon" />
+                    </button>
+                  </div>
+                ) : null}
+              </div>
               <button
                 type="button"
                 className={`toolbar-button ${editor?.isActive("superscript") ? "is-active" : ""}`}
