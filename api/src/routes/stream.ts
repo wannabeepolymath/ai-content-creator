@@ -6,7 +6,6 @@ import {
   appendConversationMessage,
   getOrCreateConversation,
   getLatestSnapshot,
-  listConversationMessages,
   saveSnapshot,
 } from "../conversation-store.js";
 import { setSseHeaders, writeSseEvent } from "../http/sse.js";
@@ -42,10 +41,8 @@ export function registerStreamRoute(app: Express) {
 
     try {
       const conversation = await getOrCreateConversation(parsed.data.conversationId, parsed.data.userId);
-      const history = await listConversationMessages(conversation.conversationId);
       console.log("[/api/stream] conversation", {
         conversationId: conversation.conversationId,
-        historyMessages: history.length,
       });
       await appendConversationMessage(conversation.conversationId, "user", parsed.data.prompt);
       const latestSnapshot = await getLatestSnapshot(conversation.conversationId);
@@ -58,7 +55,6 @@ export function registerStreamRoute(app: Express) {
 
       const streamed = await streamDocEvents(
         parsed.data,
-        history.map((item) => ({ role: item.role, rawText: item.rawText })),
         {
           onDelta(value) {
             writeSseEvent(res, "delta", { type: "text", value });

@@ -25,7 +25,7 @@ export function buildSystemPrompt() {
   ].join("\n");
 }
 
-export function buildUserPrompt(input: GenerateRequest, historyText: string, documentText?: string) {
+export function buildUserPrompt(input: GenerateRequest, documentText?: string) {
   const details =
     input.contentType === "social"
       ? "Create one strong LinkedIn-style post with a hook, 3-5 concise points, and a CTA."
@@ -37,8 +37,12 @@ export function buildUserPrompt(input: GenerateRequest, historyText: string, doc
 
   return [
     `Content type: ${input.contentType}`,
-    historyText ? `Conversation history:\n${historyText}` : "",
-    documentText?.trim() ? `Current document:\n${documentText.trim()}` : "",
+    documentText?.trim()
+      ? [
+          "Current document: ",
+          documentText.trim(),
+        ].join("\n")
+      : "",
     `User request: ${input.prompt}`,
     details,
     "Include at least one image block when relevant.",

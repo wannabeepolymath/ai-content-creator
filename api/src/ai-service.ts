@@ -11,11 +11,6 @@ function getClient() {
   return new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 }
 
-type ConversationMessage = {
-  role: "user" | "assistant";
-  rawText: string;
-};
-
 type StreamCallbacks = {
   onDelta: (value: string) => void;
   onBlock: (value: StreamBlockData) => void;
@@ -26,32 +21,21 @@ type StreamOptions = {
   documentText?: string;
 };
 
-function formatConversationHistory(history: ConversationMessage[]) {
-  return history
-    .slice(-12)
-    .map((message) => `${message.role.toUpperCase()}: ${message.rawText}`)
-    .join("\n\n");
-}
-
-
 export async function streamDocEvents(
   input: GenerateRequest,
-  history: ConversationMessage[],
   callbacks: StreamCallbacks,
   options: StreamOptions = {},
 ): Promise<{ assistantText: string; doc: TipTapDoc }> {
   const client = getClient();
   const docBuilder = createStreamDocBuilder();
-  const historyText = formatConversationHistory(history);
   const documentText = options.documentText?.trim() ?? "";
   const model = process.env.OPENAI_MODEL ?? "gpt-4.1-mini";
   const messages = [
     { role: "system" as const, content: buildSystemPrompt() },
-    { role: "user" as const, content: buildUserPrompt(input, historyText, documentText) },
+    { role: "user" as const, content: buildUserPrompt(input, documentText) },
   ];
   console.log("[ai-service] streamDocEvents start", {
     model,
-    historyTurns: history.length,
     documentChars: documentText.length,
     signal: Boolean(options.signal),
   });
