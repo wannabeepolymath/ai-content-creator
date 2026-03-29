@@ -1,5 +1,5 @@
 import type { Express } from "express";
-import { APIUserAbortError } from "openai";
+import { isAIAbortError } from "../ai/errors.js";
 import { streamDocEvents } from "../ai-service.js";
 import { tiptapDocToText } from "../ai/tiptap-text.js";
 import {
@@ -76,7 +76,7 @@ export function registerStreamRoute(app: Express) {
       writeSseEvent(res, "done", { ok: true, conversationId: conversation.conversationId });
       return res.end();
     } catch (error) {
-      if (error instanceof APIUserAbortError || (error instanceof Error && error.name === "AbortError")) {
+      if (isAIAbortError(error)) {
         console.log("[/api/stream] generation aborted (client disconnected or cancelled)");
         return res.end();
       }

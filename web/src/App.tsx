@@ -63,7 +63,7 @@ type TipTapDoc = {
 
 const CONTENT_TYPE_OPTIONS = [
   { value: "blog", label: "Blog Post" },
-  { value: "social", label: "Social Post" },
+  { value: "social", label: "Linkedin Post" },
 ] as const satisfies ReadonlyArray<{ value: ContentType; label: string }>;
 
 type StreamDelta = { type: "text"; value: string };

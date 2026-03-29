@@ -1,5 +1,6 @@
 import cors from "cors";
 import express from "express";
+import { getAIProviderSummary } from "./ai/providers/config.js";
 import { registerSnapshotRoutes } from "./routes/snapshots.js";
 import { registerStreamRoute } from "./routes/stream.js";
 
@@ -17,7 +18,13 @@ registerStreamRoute(app);
 registerSnapshotRoutes(app);
 
 app.listen(port, () => {
+  const ai = getAIProviderSummary();
   console.log(`[api] listening on http://localhost:${port}`);
-  console.log("[api] OPENAI_API_KEY set:", Boolean(process.env.OPENAI_API_KEY));
-  console.log("[api] OPENAI_MODEL:", process.env.OPENAI_MODEL ?? "(default gpt-4.1-mini)");
+  console.log("[api] AI text provider:", ai.textProvider);
+  console.log("[api] AI text model:", ai.textModel);
+  console.log("[api] AI image provider:", ai.imageProvider);
+  console.log("[api] AI image model:", ai.imageModel ?? "(disabled)");
+  for (const warning of ai.warnings) {
+    console.warn("[api] warning:", warning);
+  }
 });

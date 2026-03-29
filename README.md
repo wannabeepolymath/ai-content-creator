@@ -3,7 +3,7 @@
 This is a full-stack assignment implementation with:
 
 - TipTap-based rich editor (open-source extensions only)
-- AI content generation for blog posts and social posts
+- AI content generation for blog posts and LinkedIn posts
 - Progressive rendering via SSE streaming events
 - Conversation persistence with TipTap snapshots
 
@@ -18,7 +18,7 @@ This is a full-stack assignment implementation with:
 ### Must-haves
 
 1. Functional rich editor using TipTap OSS.
-2. AI generation from prompt input with content type selection (`blog`, `social`).
+2. AI generation from prompt input with content type selection for blog posts and LinkedIn posts (`blog`, `social`).
 3. Structured content rendering in editor, including richer elements like images and tables.
 4. Separated frontend/backend/AI orchestration with explicit API contracts.
 

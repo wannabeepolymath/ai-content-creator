@@ -1,15 +1,8 @@
-import OpenAI from "openai";
 import { createStreamDocBuilder } from "./ai/stream-doc-builder.js";
 import { mapModelLineToBlock, modelLineSchema } from "./ai/model-line.js";
+import { getAIProviders } from "./ai/providers/index.js";
 import { buildSystemPrompt, buildUserPrompt } from "./prompts.js";
 import { streamDeltaDataSchema, type GenerateRequest, type StreamBlockData, type TipTapDoc } from "./types.js";
-
-function getClient() {
-  if (!process.env.OPENAI_API_KEY) {
-    throw new Error("OPENAI_API_KEY is missing");
-  }
-  return new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-}
 
 type StreamCallbacks = {
   onDelta: (value: string) => void;
@@ -26,34 +19,47 @@ export async function streamDocEvents(
   callbacks: StreamCallbacks,
   options: StreamOptions = {},
 ): Promise<{ assistantText: string; doc: TipTapDoc }> {
-  const client = getClient();
+  const { textProvider, imageProvider } = getAIProviders();
   const docBuilder = createStreamDocBuilder();
   const documentText = options.documentText?.trim() ?? "";
-  const model = process.env.OPENAI_MODEL ?? "gpt-4.1-mini";
+  const allowImages = input.contentType !== "blog";
+  const imageGenerationMode = allowImages && imageProvider ? "provider_prompt" : "external_url";
   const messages = [
-    { role: "system" as const, content: buildSystemPrompt() },
-    { role: "user" as const, content: buildUserPrompt(input, documentText) },
+    {
+      role: "system" as const,
+      content: buildSystemPrompt({
+        allowImages,
+        imageGenerationMode,
+        imageProviderName: imageProvider?.name ?? null,
+      }),
+    },
+    {
+      role: "user" as const,
+      content: buildUserPrompt(input, documentText, {
+        allowImages,
+        imageGenerationMode,
+        imageProviderName: imageProvider?.name ?? null,
+      }),
+    },
   ];
   console.log("[ai-service] streamDocEvents start", {
-    model,
+    textProvider: textProvider.name,
+    textModel: textProvider.model,
+    imageProvider: imageProvider?.name ?? "none",
+    imageModel: imageProvider?.model ?? null,
     documentChars: documentText.length,
     signal: Boolean(options.signal),
   });
   console.log("[ai-service] final prompt to LLM", JSON.stringify(messages, null, 2));
-  const stream = await client.chat.completions.create(
-    {
-      model,
-      temperature: 0.5,
-      stream: true,
-      messages,
-    },
-    options.signal ? { signal: options.signal } : undefined,
-  );
+  const stream = await textProvider.streamText(messages, {
+    signal: options.signal,
+    temperature: 0.5,
+  });
 
   let pending = "";
   let assistantText = "";
 
-  function processLine(rawLine: string) {
+  async function processLine(rawLine: string) {
     const line = rawLine.trim();
     if (!line || line === "```" || line.startsWith("```")) {
       return;
@@ -77,7 +83,28 @@ export async function streamDocEvents(
       assistantText += delta.value;
       return;
     }
-    const block = mapModelLineToBlock(parsed.data);
+    const block = await mapModelLineToBlock(parsed.data, {
+      resolveImage: async (imageLine) => {
+        if (!allowImages) {
+          throw new Error("Image blocks are disabled for blog content");
+        }
+        if (imageLine.src) {
+          return { type: "image", src: imageLine.src, alt: imageLine.alt ?? "" };
+        }
+        if (!imageLine.prompt?.trim()) {
+          throw new Error("Image block is missing both src and prompt");
+        }
+        if (!imageProvider) {
+          throw new Error("Image prompt emitted but no image provider is configured");
+        }
+        const generatedImage = await imageProvider.generateImage({
+          prompt: imageLine.prompt,
+          alt: imageLine.alt,
+          signal: options.signal,
+        });
+        return { type: "image", src: generatedImage.src, alt: generatedImage.alt };
+      },
+    });
     if (!block) {
       return;
     }
@@ -89,9 +116,8 @@ export async function streamDocEvents(
   }
 
   let chunkCount = 0;
-  for await (const chunk of stream) {
+  for await (const token of stream) {
     chunkCount += 1;
-    const token = chunk.choices[0]?.delta?.content;
     if (!token) {
       continue;
     }
@@ -104,7 +130,7 @@ export async function streamDocEvents(
       const line = pending.slice(0, newlineIndex);
       pending = pending.slice(newlineIndex + 1);
       try {
-        processLine(line);
+        await processLine(line);
       } catch (err) {
         console.log("[ai-service] processLine error", err, "line:", line.slice(0, 200));
         continue;
@@ -114,7 +140,7 @@ export async function streamDocEvents(
 
   if (pending.trim()) {
     try {
-      processLine(pending);
+      await processLine(pending);
     } catch {
       console.log("[ai-service] trailing pending failed to parse:", pending.slice(0, 200));
     }
