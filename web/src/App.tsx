@@ -471,7 +471,7 @@ export function App() {
           status={status}
         />
 
-        <EditorWorkspace toolbarPosition={toolbarPosition} toolbar={toolbar} editor={editor} />
+        <EditorWorkspace toolbarPosition={toolbarPosition} toolbar={toolbar} editor={editor} contentType={contentType} />
       </div>
     </AppShell>
   );

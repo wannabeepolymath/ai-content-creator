@@ -52,7 +52,15 @@ export function buildSystemPrompt(options: PromptOptions) {
 export function buildUserPrompt(input: GenerateRequest, documentText: string | undefined, options: PromptOptions) {
   const details =
     input.contentType === "social"
-      ? "Create one strong LinkedIn-style post with a hook, 3-5 concise points, and a CTA."
+      ? [
+          "Create one LinkedIn post, not a blog article.",
+          "Use LinkedIn-friendly formatting: short paragraphs, strong opening hook, plain language, and clean line breaks.",
+          "Do not use markdown headings, markdown tables, code fences, or article-style section titles.",
+          "Prefer paragraphs over headings. Use a short list only if it improves readability.",
+          "Keep it concise and engaging, roughly 80-220 words unless the user asks otherwise.",
+          "Include 1 clear takeaway, a simple CTA or question near the end, and 3-5 relevant hashtags on the last line.",
+          "Use emojis sparingly and only when they feel natural for LinkedIn.",
+        ].join(" ")
       : "Create a blog post with title, intro, 3-5 sections, and practical conclusion.";
   const imageGuidance = !options.allowImages
     ? "Do not include image blocks."
