@@ -30,13 +30,11 @@ import {
   IconHorizontalRule,
   IconImageAdd,
   IconItalic,
-  IconLineBreak,
   IconLink,
   IconLinkApply,
   IconListBulleted,
   IconListNumbered,
   IconListTask,
-  IconParagraph,
   IconRedo,
   IconRowMinus,
   IconRowPlus,
@@ -247,6 +245,7 @@ export function App() {
   const headingMenuRef = useRef<HTMLDivElement>(null);
   const highlightMenuRef = useRef<HTMLDivElement>(null);
   const listMenuRef = useRef<HTMLDivElement>(null);
+  const tableMenuRef = useRef<HTMLDivElement>(null);
   const linkInputRef = useRef<HTMLInputElement>(null);
   /** Selection when the link popover was opened (URL input steals focus). */
   const linkSelectionRef = useRef<{ from: number; to: number } | null>(null);
@@ -256,6 +255,7 @@ export function App() {
   const [headingMenuOpen, setHeadingMenuOpen] = useState(false);
   const [highlightMenuOpen, setHighlightMenuOpen] = useState(false);
   const [listMenuOpen, setListMenuOpen] = useState(false);
+  const [tableMenuOpen, setTableMenuOpen] = useState(false);
   const [linkUrlDraft, setLinkUrlDraft] = useState("");
 
   const editor = useEditor({
@@ -535,6 +535,30 @@ export function App() {
       document.removeEventListener("keydown", handleKeyDown);
     };
   }, [listMenuOpen]);
+
+  useEffect(() => {
+    if (!tableMenuOpen) {
+      return;
+    }
+    function handlePointerDown(event: PointerEvent) {
+      const el = tableMenuRef.current;
+      if (!el || el.contains(event.target as Node)) {
+        return;
+      }
+      setTableMenuOpen(false);
+    }
+    function handleKeyDown(event: globalThis.KeyboardEvent) {
+      if (event.key === "Escape") {
+        setTableMenuOpen(false);
+      }
+    }
+    document.addEventListener("pointerdown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [tableMenuOpen]);
 
   async function saveSnapshot(options: {
     silent?: boolean;
@@ -1023,20 +1047,13 @@ export function App() {
             </div>
 
             <div className="toolbar-group">
-              <button
-                type="button"
-                className={`toolbar-button ${editor?.isActive("paragraph") ? "is-active" : ""}`}
-                onClick={() => editor?.chain().focus().setParagraph().run()}
-                title="Paragraph"
-              >
-                <IconParagraph />
-              </button>
               <div className="toolbar-heading-wrap" ref={headingMenuRef}>
                 <button
                   type="button"
                   className={`toolbar-button toolbar-heading-trigger ${editor?.isActive("heading") || headingMenuOpen ? "is-active" : ""}`}
                   onClick={() => {
                     setListMenuOpen(false);
+                    setTableMenuOpen(false);
                     setHeadingMenuOpen((open) => !open);
                   }}
                   title="Headings"
@@ -1072,23 +1089,13 @@ export function App() {
                   </div>
                 ) : null}
               </div>
-              <button
-                type="button"
-                className={`toolbar-button ${editor?.isActive("blockquote") ? "is-active" : ""}`}
-                onClick={() => editor?.chain().focus().toggleBlockquote().run()}
-                title="Blockquote"
-              >
-                <IconBlockquote />
-              </button>
-            </div>
-
-            <div className="toolbar-group">
               <div className="toolbar-list-wrap" ref={listMenuRef}>
                 <button
                   type="button"
                   className={`toolbar-button toolbar-list-trigger ${editor?.isActive("bulletList") || editor?.isActive("orderedList") || editor?.isActive("taskList") || listMenuOpen ? "is-active" : ""}`}
                   onClick={() => {
                     setHeadingMenuOpen(false);
+                    setTableMenuOpen(false);
                     setListMenuOpen((open) => !open);
                   }}
                   title="Lists"
@@ -1150,6 +1157,22 @@ export function App() {
                   </div>
                 ) : null}
               </div>
+              <button
+                type="button"
+                className={`toolbar-button ${editor?.isActive("blockquote") ? "is-active" : ""}`}
+                onClick={() => editor?.chain().focus().toggleBlockquote().run()}
+                title="Blockquote"
+              >
+                <IconBlockquote />
+              </button>
+              <button
+                type="button"
+                className={`toolbar-button ${editor?.isActive("codeBlock") ? "is-active" : ""}`}
+                onClick={() => editor?.chain().focus().toggleCodeBlock().run()}
+                title="Code block"
+              >
+                <IconCodeBlock />
+              </button>
             </div>
 
             <div className="toolbar-group">
@@ -1189,15 +1212,6 @@ export function App() {
               >
                 <IconStrikethrough />
               </button>
-              <button
-                type="button"
-                className={`toolbar-button ${editor?.isActive("code") ? "is-active" : ""}`}
-                onClick={() => editor?.chain().focus().toggleCode().run()}
-                disabled={!canToggleCode}
-                title="Inline code"
-              >
-                <IconCodeInline />
-              </button>
               <div className="toolbar-highlight-wrap" ref={highlightMenuRef}>
                 <button
                   type="button"
@@ -1210,7 +1224,10 @@ export function App() {
                     const { from, to } = editor.state.selection;
                     highlightSelectionRef.current = { from, to };
                   }}
-                  onClick={() => setHighlightMenuOpen((open) => !open)}
+                  onClick={() => {
+                    setTableMenuOpen(false);
+                    setHighlightMenuOpen((open) => !open);
+                  }}
                   title="Highlight"
                   aria-expanded={highlightMenuOpen}
                   aria-haspopup="listbox"
@@ -1271,6 +1288,16 @@ export function App() {
                   </div>
                 ) : null}
               </div>
+              <button
+                type="button"
+                className={`toolbar-button ${editor?.isActive("code") ? "is-active" : ""}`}
+                onClick={() => editor?.chain().focus().toggleCode().run()}
+                disabled={!canToggleCode}
+                title="Inline code"
+              >
+                <IconCodeInline />
+              </button>
+              <span className="toolbar-separator" aria-hidden />
               <button
                 type="button"
                 className={`toolbar-button ${editor?.isActive("superscript") ? "is-active" : ""}`}
@@ -1383,14 +1410,104 @@ export function App() {
               <button type="button" className="toolbar-button" onClick={openImageFilePicker} title="Insert image from file">
                 <IconImageAdd />
               </button>
-              <button
-                type="button"
-                className={`toolbar-button ${editor?.isActive("codeBlock") ? "is-active" : ""}`}
-                onClick={() => editor?.chain().focus().toggleCodeBlock().run()}
-                title="Code block"
-              >
-                <IconCodeBlock />
-              </button>
+              <div className="toolbar-table-wrap" ref={tableMenuRef}>
+                <button
+                  type="button"
+                  className={`toolbar-button toolbar-table-trigger ${editor?.isActive("table") || tableMenuOpen ? "is-active" : ""}`}
+                  onClick={() => {
+                    setHeadingMenuOpen(false);
+                    setListMenuOpen(false);
+                    setHighlightMenuOpen(false);
+                    setTableMenuOpen((open) => !open);
+                  }}
+                  title="Table"
+                  aria-expanded={tableMenuOpen}
+                  aria-haspopup="listbox"
+                  aria-label="Table"
+                >
+                  <span className="toolbar-table-trigger-inner" aria-hidden>
+                    <IconTable />
+                    <IconChevronDown className="toolbar-icon toolbar-table-chevron" />
+                  </span>
+                </button>
+                {tableMenuOpen ? (
+                  <div className="table-dropdown" role="listbox" aria-label="Table actions">
+                    <button
+                      type="button"
+                      role="option"
+                      className="table-dropdown-item"
+                      disabled={!canInsertTable}
+                      onClick={() => insertTable()}
+                    >
+                      <span className="table-dropdown-item-icon">
+                        <IconTable />
+                      </span>
+                      <span className="table-dropdown-item-label">Insert table</span>
+                    </button>
+                    <div className="table-dropdown-divider" role="separator" />
+                    <button
+                      type="button"
+                      role="option"
+                      className="table-dropdown-item"
+                      disabled={!canAddRow}
+                      onClick={() => editor?.chain().focus().addRowAfter().run()}
+                    >
+                      <span className="table-dropdown-item-icon">
+                        <IconRowPlus />
+                      </span>
+                      <span className="table-dropdown-item-label">Add row</span>
+                    </button>
+                    <button
+                      type="button"
+                      role="option"
+                      className="table-dropdown-item"
+                      disabled={!canDeleteRow}
+                      onClick={() => editor?.chain().focus().deleteRow().run()}
+                    >
+                      <span className="table-dropdown-item-icon">
+                        <IconRowMinus />
+                      </span>
+                      <span className="table-dropdown-item-label">Delete row</span>
+                    </button>
+                    <button
+                      type="button"
+                      role="option"
+                      className="table-dropdown-item"
+                      disabled={!canAddColumn}
+                      onClick={() => editor?.chain().focus().addColumnAfter().run()}
+                    >
+                      <span className="table-dropdown-item-icon">
+                        <IconColPlus />
+                      </span>
+                      <span className="table-dropdown-item-label">Add column</span>
+                    </button>
+                    <button
+                      type="button"
+                      role="option"
+                      className="table-dropdown-item"
+                      disabled={!canDeleteColumn}
+                      onClick={() => editor?.chain().focus().deleteColumn().run()}
+                    >
+                      <span className="table-dropdown-item-icon">
+                        <IconColMinus />
+                      </span>
+                      <span className="table-dropdown-item-label">Delete column</span>
+                    </button>
+                    <button
+                      type="button"
+                      role="option"
+                      className="table-dropdown-item table-dropdown-item--danger"
+                      disabled={!canDeleteTable}
+                      onClick={() => editor?.chain().focus().deleteTable().run()}
+                    >
+                      <span className="table-dropdown-item-icon">
+                        <IconTrash />
+                      </span>
+                      <span className="table-dropdown-item-label">Delete table</span>
+                    </button>
+                  </div>
+                ) : null}
+              </div>
               <button
                 type="button"
                 className="toolbar-button"
@@ -1402,75 +1519,10 @@ export function App() {
               <button
                 type="button"
                 className="toolbar-button"
-                onClick={() => editor?.chain().focus().setHardBreak().run()}
-                title="Line break"
-              >
-                <IconLineBreak />
-              </button>
-              <button
-                type="button"
-                className="toolbar-button"
                 onClick={() => editor?.chain().focus().unsetAllMarks().clearNodes().run()}
                 title="Clear formatting"
               >
                 <IconClearFormat />
-              </button>
-            </div>
-
-            <div className="toolbar-group">
-              <button
-                type="button"
-                className="toolbar-button"
-                onClick={insertTable}
-                disabled={!canInsertTable}
-                title="Insert table"
-              >
-                <IconTable />
-              </button>
-              <button
-                type="button"
-                className="toolbar-button"
-                onClick={() => editor?.chain().focus().addRowAfter().run()}
-                disabled={!canAddRow}
-                title="Add row"
-              >
-                <IconRowPlus />
-              </button>
-              <button
-                type="button"
-                className="toolbar-button"
-                onClick={() => editor?.chain().focus().deleteRow().run()}
-                disabled={!canDeleteRow}
-                title="Delete row"
-              >
-                <IconRowMinus />
-              </button>
-              <button
-                type="button"
-                className="toolbar-button"
-                onClick={() => editor?.chain().focus().addColumnAfter().run()}
-                disabled={!canAddColumn}
-                title="Add column"
-              >
-                <IconColPlus />
-              </button>
-              <button
-                type="button"
-                className="toolbar-button"
-                onClick={() => editor?.chain().focus().deleteColumn().run()}
-                disabled={!canDeleteColumn}
-                title="Delete column"
-              >
-                <IconColMinus />
-              </button>
-              <button
-                type="button"
-                className="toolbar-button"
-                onClick={() => editor?.chain().focus().deleteTable().run()}
-                disabled={!canDeleteTable}
-                title="Delete table"
-              >
-                <IconTrash />
               </button>
             </div>
           </div>

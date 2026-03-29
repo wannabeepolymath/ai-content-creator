@@ -29,16 +29,6 @@ export function IconRedo(props: SVGProps<SVGSVGElement>) {
   );
 }
 
-export function IconParagraph(props: SVGProps<SVGSVGElement>) {
-  return (
-    <svg {...base} {...props}>
-      <path d="M13 4v16" />
-      <path d="M17 4v16" />
-      <path d="M19 4H9.5a4.5 4.5 0 0 0 0 9H17" />
-    </svg>
-  );
-}
-
 type HeadingLevelProps = SVGProps<SVGSVGElement> & { level: 1 | 2 | 3 | 4 };
 
 export function IconHeading({ level, ...props }: HeadingLevelProps) {
@@ -315,19 +305,7 @@ export function IconCodeBlock(props: SVGProps<SVGSVGElement>) {
 export function IconHorizontalRule(props: SVGProps<SVGSVGElement>) {
   return (
     <svg {...base} {...props}>
-      <path d="M5 12h14" />
-      <path d="M8 8v8" />
-      <path d="M16 8v8" />
-    </svg>
-  );
-}
-
-export function IconLineBreak(props: SVGProps<SVGSVGElement>) {
-  return (
-    <svg {...base} {...props}>
-      <path d="M4 12h12" />
-      <path d="m16 8 4 4-4 4" />
-      <path d="M4 6v4" />
+      <path d="M4 12h16" />
     </svg>
   );
 }
@@ -335,10 +313,9 @@ export function IconLineBreak(props: SVGProps<SVGSVGElement>) {
 export function IconClearFormat(props: SVGProps<SVGSVGElement>) {
   return (
     <svg {...base} {...props}>
-      <path d="m7 21-4.3-4.3" />
-      <path d="M19 3 3 19" />
-      <path d="m12 7 4-4" />
-      <path d="M5.7 5.7 3 3" />
+      <path d="M7 7h10" />
+      <path d="M12 7v12" />
+      <path d="M4 4L20 20" />
     </svg>
   );
 }
