@@ -19,13 +19,24 @@ export type StreamRequestBody = {
   contentType: string;
   context: string;
   conversationId: string | null;
+  referenceFiles: File[];
 };
 
 export function postStream(body: StreamRequestBody, signal: AbortSignal) {
+  const formData = new FormData();
+  formData.append("prompt", body.prompt);
+  formData.append("contentType", body.contentType);
+  formData.append("context", body.context);
+  if (body.conversationId) {
+    formData.append("conversationId", body.conversationId);
+  }
+  for (const file of body.referenceFiles) {
+    formData.append("referenceFiles", file);
+  }
+
   return fetch(`${apiBase}/api/stream`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
+    body: formData,
     signal,
   });
 }

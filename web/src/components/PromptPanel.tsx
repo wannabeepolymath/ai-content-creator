@@ -1,6 +1,16 @@
-import type { Dispatch, RefObject, SetStateAction } from "react";
+import type { ChangeEvent, Dispatch, RefObject, SetStateAction } from "react";
 import { IconChevronDown } from "../toolbar-icons";
-import { CONTENT_TYPE_OPTIONS, type ContentType } from "../types";
+import { CONTENT_TYPE_OPTIONS, type ContentType, type ReferenceFileDraft } from "../types";
+
+function formatFileSize(bytes: number) {
+  if (bytes < 1024) {
+    return `${bytes} B`;
+  }
+  if (bytes < 1024 * 1024) {
+    return `${(bytes / 1024).toFixed(1)} KB`;
+  }
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
 
 export type PromptPanelProps = {
   contentType: ContentType;
@@ -13,6 +23,11 @@ export type PromptPanelProps = {
   context: string;
   setContext: Dispatch<SetStateAction<string>>;
   isContextVisible: boolean;
+  referenceFileInputRef: RefObject<HTMLInputElement | null>;
+  referenceFiles: ReferenceFileDraft[];
+  openReferenceFilePicker: () => void;
+  handleReferenceFilesSelected: (event: ChangeEvent<HTMLInputElement>) => void;
+  removeReferenceFile: (id: string) => void;
   revealContext: () => void;
   removeContext: () => void;
   canSave: boolean;
@@ -34,6 +49,11 @@ export function PromptPanel({
   context,
   setContext,
   isContextVisible,
+  referenceFileInputRef,
+  referenceFiles,
+  openReferenceFilePicker,
+  handleReferenceFilesSelected,
+  removeReferenceFile,
   revealContext,
   removeContext,
   canSave,
@@ -99,6 +119,34 @@ export function PromptPanel({
           />
         </label>
 
+        {referenceFiles.length > 0 ? (
+          <div className="reference-files-panel">
+            <div className="reference-files-header">
+              <span>Reference files</span>
+              <span>{referenceFiles.length} attached</span>
+            </div>
+
+            <div className="reference-files-list">
+              {referenceFiles.map((referenceFile) => (
+                <div key={referenceFile.id} className="reference-file-chip">
+                  <div className="reference-file-meta">
+                    <span className="reference-file-name">{referenceFile.file.name}</span>
+                    <span className="reference-file-size">{formatFileSize(referenceFile.file.size)}</span>
+                  </div>
+                  <button
+                    type="button"
+                    className="reference-file-remove"
+                    onClick={() => removeReferenceFile(referenceFile.id)}
+                    aria-label={`Remove ${referenceFile.file.name}`}
+                  >
+                    Remove
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : null}
+
         <div className={`context-panel ${isContextVisible ? "is-visible" : ""}`} aria-hidden={!isContextVisible}>
           <div className="context-panel-inner">
             <div className="context-panel-header">
@@ -119,6 +167,17 @@ export function PromptPanel({
 
         <div className="prompt-footer">
           <div className="prompt-actions-row">
+            <input
+              ref={referenceFileInputRef}
+              className="visually-hidden"
+              type="file"
+              accept=".txt,.md,.mdx,.markdown,application/pdf,text/plain,text/markdown"
+              multiple
+              onChange={handleReferenceFilesSelected}
+            />
+            <button type="button" className="secondary-button context-toggle-button" onClick={openReferenceFilePicker}>
+              Attach File
+            </button>
             {!isContextVisible ? (
               <button type="button" className="secondary-button context-toggle-button" onClick={revealContext}>
                 + Context

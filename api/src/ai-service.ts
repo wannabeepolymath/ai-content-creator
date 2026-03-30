@@ -2,7 +2,7 @@ import { createStreamDocBuilder } from "./ai/stream-doc-builder.js";
 import { mapModelLineToBlock, modelLineSchema } from "./ai/model-line.js";
 import { getAIProviders } from "./ai/providers/index.js";
 import { buildSystemPrompt, buildUserPrompt } from "./prompts.js";
-import { streamDeltaDataSchema, type GenerateRequest, type StreamBlockData, type TipTapDoc } from "./types.js";
+import { streamDeltaDataSchema, type GenerateRequest, type ReferenceMaterial, type StreamBlockData, type TipTapDoc } from "./types.js";
 
 type StreamCallbacks = {
   onDelta: (value: string) => void;
@@ -12,6 +12,7 @@ type StreamCallbacks = {
 type StreamOptions = {
   signal?: AbortSignal;
   documentText?: string;
+  references?: ReferenceMaterial[];
 };
 
 export async function streamDocEvents(
@@ -22,6 +23,7 @@ export async function streamDocEvents(
   const { textProvider, imageProvider } = getAIProviders();
   const docBuilder = createStreamDocBuilder();
   const documentText = options.documentText?.trim() ?? "";
+  const references = options.references ?? [];
   const allowImages = input.contentType !== "blog";
   const imageGenerationMode = allowImages && imageProvider ? "provider_prompt" : "external_url";
   const messages = [
@@ -39,7 +41,7 @@ export async function streamDocEvents(
         allowImages,
         imageGenerationMode,
         imageProviderName: imageProvider?.name ?? null,
-      }),
+      }, references),
     },
   ];
   console.log("[ai-service] streamDocEvents start", {
@@ -48,6 +50,8 @@ export async function streamDocEvents(
     imageProvider: imageProvider?.name ?? "none",
     imageModel: imageProvider?.model ?? null,
     documentChars: documentText.length,
+    referenceCount: references.length,
+    referenceChars: references.reduce((total, reference) => total + reference.charCount, 0),
     signal: Boolean(options.signal),
   });
   console.log("[ai-service] final prompt to LLM", JSON.stringify(messages, null, 2));

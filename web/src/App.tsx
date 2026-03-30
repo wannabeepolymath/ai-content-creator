@@ -11,7 +11,7 @@ import {
   renderDraftDoc,
   resetDraftDoc,
 } from "./stream/draft";
-import type { ContentType, StreamBlock, StreamDelta, TipTapDoc, ToolbarPosition } from "./types";
+import type { ContentType, ReferenceFileDraft, StreamBlock, StreamDelta, TipTapDoc, ToolbarPosition } from "./types";
 import { EditorToolbar } from "./components/EditorToolbar";
 import { PromptPanel } from "./components/PromptPanel";
 import { AppShell } from "./components/AppShell";
@@ -23,9 +23,17 @@ import { useOverlayDismiss } from "./hooks/useOverlayDismiss";
 import { useLinkPopoverFocus } from "./hooks/useLinkPopoverFocus";
 import { useEditorToolbarCapabilities } from "./hooks/useEditorToolbarCapabilities";
 
+const SUPPORTED_REFERENCE_EXTENSIONS = new Set(["txt", "md", "mdx", "markdown", "pdf"]);
+
+function isSupportedReferenceFile(file: File) {
+  const extension = file.name.split(".").pop()?.toLowerCase() ?? "";
+  return SUPPORTED_REFERENCE_EXTENSIONS.has(extension);
+}
+
 export function App() {
   const [prompt, setPrompt] = useState("");
   const [context, setContext] = useState("");
+  const [referenceFiles, setReferenceFiles] = useState<ReferenceFileDraft[]>([]);
   const [showContext, setShowContext] = useState(false);
   const [contentType, setContentType] = useState<ContentType>("blog");
   const [toolbarPosition, setToolbarPosition] = useState<ToolbarPosition>("side");
@@ -36,6 +44,7 @@ export function App() {
   const [conversationId, setConversationId] = useState<string | null>(null);
   const draftDocRef = useRef<TipTapDoc>({ type: "doc", content: [] });
   const draftStateRef = useRef<DraftState>({ currentTextNodes: null, activeBlock: null, currentList: null });
+  const referenceFileInputRef = useRef<HTMLInputElement>(null);
   const imageFileInputRef = useRef<HTMLInputElement>(null);
   const imageFloatGestureRef = useRef<ImageFloatGesture | null>(null);
   const linkPopoverRef = useRef<HTMLDivElement>(null);
@@ -175,7 +184,13 @@ export function App() {
 
     try {
       const response = await postStream(
-        { prompt, contentType, context, conversationId: activeConversationId },
+        {
+          prompt,
+          contentType,
+          context,
+          conversationId: activeConversationId,
+          referenceFiles: referenceFiles.map((referenceFile) => referenceFile.file),
+        },
         controller.signal,
       );
 
@@ -377,6 +392,62 @@ export function App() {
     setShowContext(true);
   }
 
+  function openReferenceFilePicker() {
+    referenceFileInputRef.current?.click();
+  }
+
+  function handleReferenceFilesSelected(event: ChangeEvent<HTMLInputElement>) {
+    const selectedFiles = Array.from(event.target.files ?? []);
+    event.target.value = "";
+    if (selectedFiles.length === 0) {
+      return;
+    }
+
+    const supportedFiles = selectedFiles.filter(isSupportedReferenceFile);
+    const rejectedCount = selectedFiles.length - supportedFiles.length;
+    let addedCount = 0;
+    let duplicateCount = 0;
+
+    setReferenceFiles((current) => {
+      const next = [...current];
+      for (const file of supportedFiles) {
+        const alreadyAttached = next.some(
+          (referenceFile) =>
+            referenceFile.file.name === file.name &&
+            referenceFile.file.size === file.size &&
+            referenceFile.file.lastModified === file.lastModified,
+        );
+        if (alreadyAttached) {
+          duplicateCount += 1;
+          continue;
+        }
+
+        next.push({
+          id: crypto.randomUUID(),
+          file,
+        });
+        addedCount += 1;
+      }
+      return next;
+    });
+
+    if (addedCount > 0) {
+      setStatus(`${addedCount} reference file${addedCount === 1 ? "" : "s"} attached.`);
+      return;
+    }
+    if (duplicateCount > 0 && rejectedCount === 0) {
+      setStatus("That file is already attached.");
+      return;
+    }
+    if (rejectedCount > 0) {
+      setStatus("Only TXT, MD, MDX, MARKDOWN, and PDF files are supported.");
+    }
+  }
+
+  function removeReferenceFile(id: string) {
+    setReferenceFiles((current) => current.filter((referenceFile) => referenceFile.id !== id));
+  }
+
   function removeContext() {
     setContext("");
     setShowContext(false);
@@ -461,6 +532,11 @@ export function App() {
           context={context}
           setContext={setContext}
           isContextVisible={isContextVisible}
+          referenceFileInputRef={referenceFileInputRef}
+          referenceFiles={referenceFiles}
+          openReferenceFilePicker={openReferenceFilePicker}
+          handleReferenceFilesSelected={handleReferenceFilesSelected}
+          removeReferenceFile={removeReferenceFile}
           revealContext={revealContext}
           removeContext={removeContext}
           canSave={canSave}

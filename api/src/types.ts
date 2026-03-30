@@ -18,6 +18,16 @@ export const generateRequestSchema = z.object({
 
 export type GenerateRequest = z.infer<typeof generateRequestSchema>;
 
+export type ReferenceMaterial = {
+  id: string;
+  kind: "file";
+  name: string;
+  mimeType?: string;
+  extractedText: string;
+  charCount: number;
+  truncated: boolean;
+};
+
 export type TipTapNode = {
   type: string;
   attrs?: Record<string, unknown>;

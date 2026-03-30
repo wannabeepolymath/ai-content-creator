@@ -1,6 +1,11 @@
 export type ContentType = "social" | "blog";
 export type ToolbarPosition = "side" | "top";
 
+export type ReferenceFileDraft = {
+  id: string;
+  file: File;
+};
+
 export type TipTapNode = {
   type: string;
   attrs?: Record<string, unknown>;

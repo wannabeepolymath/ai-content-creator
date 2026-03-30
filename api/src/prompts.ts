@@ -1,4 +1,4 @@
-import type { GenerateRequest } from "./types.js";
+import type { GenerateRequest, ReferenceMaterial } from "./types.js";
 
 type PromptOptions = {
   imageGenerationMode: "provider_prompt" | "external_url";
@@ -49,7 +49,40 @@ export function buildSystemPrompt(options: PromptOptions) {
   ].join("\n");
 }
 
-export function buildUserPrompt(input: GenerateRequest, documentText: string | undefined, options: PromptOptions) {
+function buildReferenceContext(input: GenerateRequest, references: ReferenceMaterial[]) {
+  const sections: string[] = [];
+
+  if (input.context?.trim()) {
+    sections.push(["Manual context:", input.context.trim()].join("\n"));
+  }
+
+  if (references.length > 0) {
+    const renderedReferences = references.map((reference, index) =>
+      [
+        `[${index + 1}] Attached file: ${reference.name}${reference.truncated ? " (truncated)" : ""}`,
+        reference.extractedText,
+      ].join("\n"),
+    );
+
+    sections.push(["Reference files:", ...renderedReferences].join("\n\n"));
+  }
+
+  if (sections.length === 0) {
+    return "";
+  }
+
+  return [
+    "Use the following context when it is relevant. Prefer these materials over assumptions, and do not invent facts that are not supported by them.",
+    ...sections,
+  ].join("\n\n");
+}
+
+export function buildUserPrompt(
+  input: GenerateRequest,
+  documentText: string | undefined,
+  options: PromptOptions,
+  references: ReferenceMaterial[] = [],
+) {
   const details =
     input.contentType === "social"
       ? [
@@ -68,9 +101,7 @@ export function buildUserPrompt(input: GenerateRequest, documentText: string | u
       ? "When an image helps, include one image block with a short visual prompt and clear alt text."
       : "Include at least one image block when relevant.";
 
-  const contextText = input.context?.trim()
-    ? `\nReference context:\n${input.context}`
-    : "";
+  const contextText = buildReferenceContext(input, references);
 
   return [
     `Content type: ${input.contentType}`,
@@ -83,6 +114,6 @@ export function buildUserPrompt(input: GenerateRequest, documentText: string | u
     `User request: ${input.prompt}`,
     details,
     imageGuidance,
-    contextText,
+    contextText ? `\n${contextText}` : "",
   ].join("\n");
 }
