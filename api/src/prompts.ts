@@ -44,7 +44,9 @@ export function buildSystemPrompt(options: PromptOptions) {
     '{"kind":"block","block":"list_item_end"}',
     ...allowedLineObjects,
     '{"kind":"delta","text":"Text chunk"}',
-    "Emit many delta lines so text appears progressively.",
+    "Emit very small delta lines so text appears progressively.",
+    "Prefer delta chunks of 5-10 characters. If possible, keep them even smaller.",
+    "Do not wait for sentence boundaries to emit deltas.",
     supportedBlocks,
   ].join("\n");
 }
