@@ -1,4 +1,4 @@
-# Magi AI-Powered Content Editor
+# AI content creator
 
 This is a full-stack assignment implementation with:
 

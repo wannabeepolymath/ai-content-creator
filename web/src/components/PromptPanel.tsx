@@ -30,8 +30,6 @@ export type PromptPanelProps = {
   removeReferenceFile: (id: string) => void;
   revealContext: () => void;
   removeContext: () => void;
-  canSave: boolean;
-  saveSnapshot: () => void | Promise<unknown>;
   isGenerating: boolean;
   canGenerate: boolean;
   handleGenerateButtonClick: () => void;
@@ -56,8 +54,6 @@ export function PromptPanel({
   removeReferenceFile,
   revealContext,
   removeContext,
-  canSave,
-  saveSnapshot,
   isGenerating,
   canGenerate,
   handleGenerateButtonClick,
@@ -102,10 +98,6 @@ export function PromptPanel({
                 ) : null}
               </span>
             </label>
-
-            <button type="button" className="secondary-button save-button-inline" onClick={() => void saveSnapshot()} disabled={!canSave}>
-              Save
-            </button>
           </div>
         </div>
 

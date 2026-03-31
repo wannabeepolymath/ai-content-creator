@@ -74,7 +74,6 @@ export function App() {
     },
   });
 
-  const { isDirty, setIsDirty, markEditorAsSaved } = useEditorDirtyTracking(editor);
   useToolbarTransactionRevision(editor);
   useImageFloatGestures(editor, imageFloatGestureRef);
   useLinkPopoverFocus(linkPopoverOpen, linkInputRef);
@@ -91,19 +90,22 @@ export function App() {
 
   const toolbarCaps = useEditorToolbarCapabilities(editor);
 
-  const canGenerate = useMemo(
-    () => prompt.trim().length > 0 && !isGenerating && !isSaving && !!editor,
-    [prompt, isGenerating, isSaving, editor],
-  );
-  const canSave = useMemo(
-    () => !isGenerating && !isSaving && !!editor && isDirty,
-    [isGenerating, isSaving, editor, isDirty],
-  );
+  const isAutoSaveBlockedRef = useRef(false);
+  const autoSaveRef = useRef<() => void>(() => {});
+
+  const { setIsDirty, markEditorAsSaved } = useEditorDirtyTracking(editor, {
+    delayMs: 20_000,
+    isBlockedRef: isAutoSaveBlockedRef,
+    onSave: () => void autoSaveRef.current(),
+  });
+
   const isContextVisible = showContext || context.trim().length > 0;
   const isTopToolbar = toolbarPosition === "top";
 
   async function saveSnapshot(options: {
     silent?: boolean;
+    /** When true with silent, shows "Auto-saved." in the status line. */
+    autoSave?: boolean;
     editorInstance?: Editor;
     conversationIdOverride?: string | null;
   } = {}) {
@@ -132,6 +134,8 @@ export function App() {
       markEditorAsSaved(activeEditor);
       if (!options.silent) {
         setStatus("Saved.");
+      } else if (options.autoSave) {
+        setStatus("Auto-saved.");
       }
       return payload.conversationId ?? activeConversationId;
     } catch (error) {
@@ -143,6 +147,14 @@ export function App() {
       setIsSaving(false);
     }
   }
+
+  autoSaveRef.current = () => void saveSnapshot({ silent: true, autoSave: true });
+  isAutoSaveBlockedRef.current = isGenerating || isSaving;
+
+  const canGenerate = useMemo(
+    () => prompt.trim().length > 0 && !isGenerating && !isSaving && !!editor,
+    [prompt, isGenerating, isSaving, editor],
+  );
 
   function resetDraftDocLocal() {
     resetDraftDoc(draftDocRef, draftStateRef);
@@ -539,8 +551,6 @@ export function App() {
           removeReferenceFile={removeReferenceFile}
           revealContext={revealContext}
           removeContext={removeContext}
-          canSave={canSave}
-          saveSnapshot={saveSnapshot}
           isGenerating={isGenerating}
           canGenerate={canGenerate}
           handleGenerateButtonClick={handleGenerateButtonClick}

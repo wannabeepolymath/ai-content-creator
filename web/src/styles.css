@@ -85,7 +85,7 @@ button:disabled {
 .app-header-inner h1 {
   margin: 0;
   font-size: clamp(2rem, 3.3vw, 2.6rem);
-  font-weight: 800;
+  font-weight: 500;
   letter-spacing: -0.06em;
 }
 
@@ -388,11 +388,6 @@ button:disabled {
   transform: translateY(-1px);
   background: var(--accent-soft);
   border-color: var(--accent-soft-border);
-}
-
-.save-button-inline {
-  min-width: 96px;
-  margin-left: auto;
 }
 
 .context-panel {
@@ -1352,7 +1347,6 @@ button:disabled {
 
   .prompt-select-wrap,
   .prompt-select-trigger,
-  .save-button-inline,
   .generate-button {
     width: 100%;
   }
