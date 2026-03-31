@@ -20,6 +20,8 @@ export type StreamRequestBody = {
   context: string;
   conversationId: string | null;
   referenceFiles: File[];
+  /** Sent as `X-API-Key`; overrides server env for the active text provider. */
+  apiKey?: string;
 };
 
 export function postStream(body: StreamRequestBody, signal: AbortSignal) {
@@ -34,8 +36,15 @@ export function postStream(body: StreamRequestBody, signal: AbortSignal) {
     formData.append("referenceFiles", file);
   }
 
+  const headers: HeadersInit = {};
+  const trimmedKey = body.apiKey?.trim();
+  if (trimmedKey) {
+    headers["X-API-Key"] = trimmedKey;
+  }
+
   return fetch(`${apiBase}/api/stream`, {
     method: "POST",
+    headers,
     body: formData,
     signal,
   });

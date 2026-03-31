@@ -104,6 +104,8 @@ async function handleStreamRequest(req: Request, res: Response) {
       return res.end();
     }
 
+    const requestApiKey = req.get("x-api-key")?.trim() || undefined;
+
     const streamed = await streamDocEvents(
       parsed.data,
       {
@@ -114,7 +116,12 @@ async function handleStreamRequest(req: Request, res: Response) {
           writeSseEvent(res, "block", value);
         },
       },
-      { signal: abortController.signal, documentText: latestDocumentText, references },
+      {
+        signal: abortController.signal,
+        documentText: latestDocumentText,
+        references,
+        apiKey: requestApiKey || undefined,
+      },
     );
 
     await appendConversationMessage(conversation.conversationId, "assistant", streamed.assistantText);

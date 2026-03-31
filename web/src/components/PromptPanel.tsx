@@ -30,6 +30,9 @@ export type PromptPanelProps = {
   removeReferenceFile: (id: string) => void;
   revealContext: () => void;
   removeContext: () => void;
+  apiKey: string;
+  onApiKeyChange: (event: ChangeEvent<HTMLInputElement>) => void;
+  onApiKeyBlur: (event: ChangeEvent<HTMLInputElement>) => void;
   isGenerating: boolean;
   canGenerate: boolean;
   handleGenerateButtonClick: () => void;
@@ -54,6 +57,9 @@ export function PromptPanel({
   removeReferenceFile,
   revealContext,
   removeContext,
+  apiKey,
+  onApiKeyChange,
+  onApiKeyBlur,
   isGenerating,
   canGenerate,
   handleGenerateButtonClick,
@@ -97,6 +103,20 @@ export function PromptPanel({
                   </div>
                 ) : null}
               </span>
+            </label>
+
+            <label className="prompt-api-key-inline">
+              <span className="prompt-select-label">API key</span>
+              <input
+                type="password"
+                className="prompt-api-key-input"
+                value={apiKey}
+                onChange={onApiKeyChange}
+                onBlur={onApiKeyBlur}
+                placeholder="OpenAI or Gemini"
+                autoComplete="off"
+                spellCheck={false}
+              />
             </label>
           </div>
         </div>

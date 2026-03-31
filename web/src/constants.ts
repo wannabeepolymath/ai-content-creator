@@ -6,6 +6,9 @@ export const IMAGE_FLOAT_DRAG_V = 48;
 
 export const apiBase = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:4000";
 
+/** localStorage key for per-browser API key (matches server `AI_TEXT_PROVIDER`). */
+export const USER_API_KEY_STORAGE_KEY = "magi-user-api-key";
+
 /** Pastel highlighter colors (TipTap multicolor highlight). */
 export const HIGHLIGHT_COLORS = [
   { label: "Green", color: "#bbf7d0" },

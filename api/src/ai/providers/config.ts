@@ -50,13 +50,6 @@ export function getAIProviderConfig(): AIProviderConfig {
     geminiImageModel: process.env.GEMINI_IMAGE_MODEL?.trim() || "gemini-3.1-flash-image-preview",
   });
 
-  if (parsed.textProvider === "openai" && !parsed.openAiApiKey) {
-    throw new Error("OPENAI_API_KEY is required when AI_TEXT_PROVIDER=openai");
-  }
-  if (parsed.textProvider === "gemini" && !parsed.geminiApiKey) {
-    throw new Error("GEMINI_API_KEY is required when AI_TEXT_PROVIDER=gemini");
-  }
-
   return parsed;
 }
 
@@ -69,7 +62,13 @@ export function getEffectiveImageProvider(config: AIProviderConfig): ImageProvid
 
 export function getAIProviderWarnings(config: AIProviderConfig): AIProviderWarnings {
   const warnings: string[] = [];
-  if (config.imageProvider === "gemini" && !config.geminiApiKey) {
+  if (config.textProvider === "openai" && !config.openAiApiKey?.trim()) {
+    warnings.push("OPENAI_API_KEY is not set. Provide it in .env or send X-API-Key from the app.");
+  }
+  if (config.textProvider === "gemini" && !config.geminiApiKey?.trim()) {
+    warnings.push("GEMINI_API_KEY is not set. Provide it in .env or send X-API-Key from the app.");
+  }
+  if (config.imageProvider === "gemini" && !config.geminiApiKey?.trim()) {
     warnings.push("AI_IMAGE_PROVIDER=gemini is configured, but GEMINI_API_KEY is missing. Image generation is disabled.");
   }
   return { warnings };

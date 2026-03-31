@@ -13,6 +13,8 @@ type StreamOptions = {
   signal?: AbortSignal;
   documentText?: string;
   references?: ReferenceMaterial[];
+  /** Overrides server env API key for the active text provider (OpenAI or Gemini). */
+  apiKey?: string | null;
 };
 
 export async function streamDocEvents(
@@ -20,7 +22,7 @@ export async function streamDocEvents(
   callbacks: StreamCallbacks,
   options: StreamOptions = {},
 ): Promise<{ assistantText: string; doc: TipTapDoc }> {
-  const { textProvider, imageProvider } = getAIProviders();
+  const { textProvider, imageProvider } = getAIProviders({ apiKey: options.apiKey });
   const docBuilder = createStreamDocBuilder();
   const documentText = options.documentText?.trim() ?? "";
   const references = options.references ?? [];

@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState, type ChangeEvent, type KeyboardEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type ChangeEvent, type KeyboardEvent } from "react";
 import { useEditor, type Editor } from "@tiptap/react";
 import { editorDefaultContent, editorExtensions } from "./editor/extensions";
 import { normalizeLinkHref, restoreLinkSelection } from "./lib/link";
@@ -22,6 +22,7 @@ import { useImageFloatGestures, type ImageFloatGesture } from "./hooks/useImageF
 import { useOverlayDismiss } from "./hooks/useOverlayDismiss";
 import { useLinkPopoverFocus } from "./hooks/useLinkPopoverFocus";
 import { useEditorToolbarCapabilities } from "./hooks/useEditorToolbarCapabilities";
+import { USER_API_KEY_STORAGE_KEY } from "./constants";
 
 const SUPPORTED_REFERENCE_EXTENSIONS = new Set(["txt", "md", "mdx", "markdown", "pdf"]);
 
@@ -42,6 +43,7 @@ export function App() {
   const [status, setStatus] = useState("Ready.");
   const [abortController, setAbortController] = useState<AbortController | null>(null);
   const [conversationId, setConversationId] = useState<string | null>(null);
+  const [apiKey, setApiKey] = useState("");
   const draftDocRef = useRef<TipTapDoc>({ type: "doc", content: [] });
   const draftStateRef = useRef<DraftState>({ currentTextNodes: null, activeBlock: null, currentList: null });
   const referenceFileInputRef = useRef<HTMLInputElement>(null);
@@ -73,6 +75,17 @@ export function App() {
       },
     },
   });
+
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem(USER_API_KEY_STORAGE_KEY);
+      if (stored) {
+        setApiKey(stored);
+      }
+    } catch {
+      /* ignore */
+    }
+  }, []);
 
   useToolbarTransactionRevision(editor);
   useImageFloatGestures(editor, imageFloatGestureRef);
@@ -202,6 +215,7 @@ export function App() {
           context,
           conversationId: activeConversationId,
           referenceFiles: referenceFiles.map((referenceFile) => referenceFile.file),
+          apiKey: apiKey.trim() || undefined,
         },
         controller.signal,
       );
@@ -465,6 +479,23 @@ export function App() {
     setShowContext(false);
   }
 
+  function handleApiKeyChange(event: ChangeEvent<HTMLInputElement>) {
+    setApiKey(event.target.value);
+  }
+
+  function handleApiKeyBlur(event: ChangeEvent<HTMLInputElement>) {
+    const value = event.target.value.trim();
+    try {
+      if (value) {
+        localStorage.setItem(USER_API_KEY_STORAGE_KEY, value);
+      } else {
+        localStorage.removeItem(USER_API_KEY_STORAGE_KEY);
+      }
+    } catch {
+      /* ignore */
+    }
+  }
+
   function handleGenerateButtonClick() {
     if (isGenerating) {
       stopGeneration();
@@ -551,6 +582,9 @@ export function App() {
           removeReferenceFile={removeReferenceFile}
           revealContext={revealContext}
           removeContext={removeContext}
+          apiKey={apiKey}
+          onApiKeyChange={handleApiKeyChange}
+          onApiKeyBlur={handleApiKeyBlur}
           isGenerating={isGenerating}
           canGenerate={canGenerate}
           handleGenerateButtonClick={handleGenerateButtonClick}
