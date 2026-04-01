@@ -7,6 +7,10 @@ This is a full-stack assignment implementation with:
 - Progressive rendering via SSE streaming events
 - Conversation persistence with TipTap snapshots
 
+## Demo
+[Project walkthrough (Loom)](https://www.loom.com/share/816e8ace4cde415bb736a49007c8be9a)
+
+
 ## Tech stack
 
 - Frontend: React + Vite + TipTap
