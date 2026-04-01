@@ -1,5 +1,4 @@
 import path from "node:path";
-import { PDFParse } from "pdf-parse";
 import type { ReferenceMaterial } from "./types.js";
 
 const MAX_REFERENCE_CHARS = 12_000;
@@ -48,6 +47,7 @@ async function extractTextFromFile(file: Express.Multer.File, kind: SupportedRef
     return file.buffer.toString("utf8");
   }
 
+  const { PDFParse } = await import("pdf-parse");
   const parser = new PDFParse({ data: file.buffer });
   try {
     const parsed = await parser.getText();

@@ -1,7 +1,5 @@
 import { getAIProviderSummary } from "./ai/providers/config.js";
-import { createApp } from "./app.js";
-
-const app = createApp();
+import app from "./app.js";
 
 export default app;
 
