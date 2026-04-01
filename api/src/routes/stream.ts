@@ -15,6 +15,7 @@ import { generateRequestSchema, type ReferenceMaterial } from "../types.js";
 
 export function registerStreamRoute(app: Express) {
   const uploadLimits = getReferenceUploadLimits();
+  const uploadLimitMb = Math.floor(uploadLimits.maxFileBytes / (1024 * 1024));
   const upload = multer({
     storage: multer.memoryStorage(),
     limits: {
@@ -33,7 +34,7 @@ export function registerStreamRoute(app: Express) {
       const message =
         error instanceof multer.MulterError
           ? error.code === "LIMIT_FILE_SIZE"
-            ? "Each reference file must be 5 MB or smaller."
+            ? `Each reference file must be ${uploadLimitMb} MB or smaller.`
             : error.code === "LIMIT_FILE_COUNT"
               ? `You can attach up to ${uploadLimits.maxFiles} files per request.`
               : error.message

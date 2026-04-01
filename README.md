@@ -86,6 +86,87 @@ npm run build
 npm run lint
 ```
 
+## Deploying on Vercel
+
+Deploy the backend first, then deploy the frontend with the backend URL.
+
+### 1. Backend deploy (`api/`)
+
+This backend is now Vercel-compatible as an Express app exported from `api/src/index.ts`.
+
+Recommended Vercel project settings:
+
+- Root Directory: `api`
+- Framework Preset: `Other`
+- Install Command: leave default
+- Build Command: leave default
+
+Backend environment variables:
+
+- `OPENAI_API_KEY` or `GEMINI_API_KEY`, depending on provider
+- `AI_TEXT_PROVIDER`
+- `AI_IMAGE_PROVIDER`
+- `OPENAI_MODEL` or `GEMINI_TEXT_MODEL`
+- `GEMINI_IMAGE_MODEL` if you enable Gemini image generation
+- `CORS_ORIGINS=https://<your-frontend-domain>`
+- Optional: `ALLOW_VERCEL_PREVIEW_ORIGINS=true` if you want preview frontend URLs on `*.vercel.app` to call the API
+
+After deploy, verify:
+
+- `https://<your-backend-domain>/api/health` returns `{ "ok": true }`
+
+Important backend notes on Vercel:
+
+- Vercel functions do not provide durable local filesystem storage. This app falls back to `/tmp/magi-conversations.json` on Vercel so the API works, but conversation history and snapshots are not guaranteed to survive cold starts or instance changes.
+- If you need real persistence, move `api/src/conversation-store.ts` to external storage such as Neon, Supabase, Upstash Redis, or another hosted database.
+- Reference-file uploads are stricter on Vercel because function payloads are limited. The deployed backend now caps uploads to 1 file up to 4 MB. Keep the total request small.
+
+### 2. Frontend deploy (`web/`)
+
+Recommended Vercel project settings:
+
+- Root Directory: `web`
+- Framework Preset: `Vite`
+- Install Command: leave default
+- Build Command: leave default
+- Output Directory: `dist`
+
+Frontend environment variables:
+
+- `VITE_API_BASE_URL=https://<your-backend-domain>`
+
+After deploy, open the frontend and test:
+
+- Save
+- Generate
+- Stop generation
+- Reload after a save
+
+### 3. Suggested deploy order
+
+1. Push your repo to GitHub.
+2. Import the repo into Vercel as a backend project with root `api`.
+3. Add backend env vars and deploy.
+4. Copy the backend production URL.
+5. Import the same repo again into Vercel as a frontend project with root `web`.
+6. Add `VITE_API_BASE_URL` pointing to the backend URL.
+7. Deploy the frontend.
+8. Add the final frontend URL back into backend `CORS_ORIGINS` and redeploy the backend if needed.
+
+### 4. Preview deploys
+
+If you want frontend preview deployments to work against the same backend:
+
+- Set `ALLOW_VERCEL_PREVIEW_ORIGINS=true` on the backend, or
+- Add the exact preview URLs to `CORS_ORIGINS`
+
+### 5. Custom domains
+
+If you later attach custom domains:
+
+- Update `CORS_ORIGINS` on the backend to use the custom frontend domain
+- Update `VITE_API_BASE_URL` on the frontend if the backend gets a custom domain too
+
 ## Design choices and tradeoffs
 
 - **Streaming protocol**: SSE with JSON payloads (`event:` + `data:`) keeps transport simple and robust for long responses.

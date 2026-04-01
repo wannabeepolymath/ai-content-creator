@@ -1,4 +1,4 @@
-import OpenAI from "openai";
+import { OpenAI } from "openai";
 import type { ProviderMessage, StreamTextOptions, TextGenerationProvider } from "./types.js";
 
 type OpenAITextProviderOptions = {

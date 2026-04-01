@@ -1,30 +1,22 @@
-import cors from "cors";
-import express from "express";
 import { getAIProviderSummary } from "./ai/providers/config.js";
-import { registerSnapshotRoutes } from "./routes/snapshots.js";
-import { registerStreamRoute } from "./routes/stream.js";
+import { createApp } from "./app.js";
 
-const app = express();
-const port = Number(process.env.PORT ?? 4000);
+const app = createApp();
 
-app.use(cors({ origin: process.env.WEB_ORIGIN ?? "http://localhost:5173" }));
-app.use(express.json({ limit: "5mb" }));
+export default app;
 
-app.get("/api/health", (_req, res) => {
-  res.json({ ok: true });
-});
+if (!process.env.VERCEL) {
+  const port = Number(process.env.PORT ?? 4000);
 
-registerStreamRoute(app);
-registerSnapshotRoutes(app);
-
-app.listen(port, () => {
-  const ai = getAIProviderSummary();
-  console.log(`[api] listening on http://localhost:${port}`);
-  console.log("[api] AI text provider:", ai.textProvider);
-  console.log("[api] AI text model:", ai.textModel);
-  console.log("[api] AI image provider:", ai.imageProvider);
-  console.log("[api] AI image model:", ai.imageModel ?? "(disabled)");
-  for (const warning of ai.warnings) {
-    console.warn("[api] warning:", warning);
-  }
-});
+  app.listen(port, () => {
+    const ai = getAIProviderSummary();
+    console.log(`[api] listening on http://localhost:${port}`);
+    console.log("[api] AI text provider:", ai.textProvider);
+    console.log("[api] AI text model:", ai.textModel);
+    console.log("[api] AI image provider:", ai.imageProvider);
+    console.log("[api] AI image model:", ai.imageModel ?? "(disabled)");
+    for (const warning of ai.warnings) {
+      console.warn("[api] warning:", warning);
+    }
+  });
+}

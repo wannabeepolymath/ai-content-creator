@@ -4,7 +4,14 @@ export const MIN_IMAGE_WIDTH = 120;
 export const IMAGE_FLOAT_DRAG_H = 36;
 export const IMAGE_FLOAT_DRAG_V = 48;
 
-export const apiBase = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:4000";
+const configuredApiBase = import.meta.env.VITE_API_BASE_URL?.trim();
+
+export const apiBase = (configuredApiBase
+  ? configuredApiBase
+  : import.meta.env.DEV
+    ? "http://localhost:4000"
+    : ""
+).replace(/\/$/, "");
 
 /** localStorage key for per-browser API key (matches server `AI_TEXT_PROVIDER`). */
 export const USER_API_KEY_STORAGE_KEY = "magi-user-api-key";

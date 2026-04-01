@@ -2,8 +2,6 @@ import path from "node:path";
 import { PDFParse } from "pdf-parse";
 import type { ReferenceMaterial } from "./types.js";
 
-const MAX_REFERENCE_FILES = 5;
-const MAX_REFERENCE_FILE_BYTES = 5 * 1024 * 1024;
 const MAX_REFERENCE_CHARS = 12_000;
 
 const TEXT_FILE_EXTENSIONS = new Set([".txt", ".md", ".mdx", ".markdown"]);
@@ -60,21 +58,25 @@ async function extractTextFromFile(file: Express.Multer.File, kind: SupportedRef
 }
 
 export function getReferenceUploadLimits() {
+  const runningOnVercel = Boolean(process.env.VERCEL);
   return {
-    maxFiles: MAX_REFERENCE_FILES,
-    maxFileBytes: MAX_REFERENCE_FILE_BYTES,
+    maxFiles: runningOnVercel ? 1 : 5,
+    maxFileBytes: runningOnVercel ? 4 * 1024 * 1024 : 5 * 1024 * 1024,
   };
 }
 
 export async function extractReferenceMaterials(files: Express.Multer.File[]) {
-  if (files.length > MAX_REFERENCE_FILES) {
-    throw new Error(`You can attach up to ${MAX_REFERENCE_FILES} files per request.`);
+  const limits = getReferenceUploadLimits();
+  if (files.length > limits.maxFiles) {
+    throw new Error(`You can attach up to ${limits.maxFiles} files per request.`);
   }
 
   const references: ReferenceMaterial[] = [];
   for (const [index, file] of files.entries()) {
-    if (file.size > MAX_REFERENCE_FILE_BYTES) {
-      throw new Error(`"${file.originalname}" exceeds the 5 MB per-file limit.`);
+    if (file.size > limits.maxFileBytes) {
+      throw new Error(
+        `"${file.originalname}" exceeds the ${Math.floor(limits.maxFileBytes / (1024 * 1024))} MB per-file limit.`,
+      );
     }
 
     const kind = getSupportedReferenceKind(file);

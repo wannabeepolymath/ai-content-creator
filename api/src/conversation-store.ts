@@ -33,17 +33,32 @@ type StoreData = {
   snapshots: SnapshotRecord[];
 };
 
-const currentFilePath = fileURLToPath(import.meta.url);
-const dataDirectory = join(dirname(currentFilePath), "../data");
-const storePath = join(dataDirectory, "conversations.json");
-
 const emptyStore: StoreData = {
   conversations: [],
   messages: [],
   snapshots: [],
 };
 
+const currentFilePath = fileURLToPath(import.meta.url);
+const defaultStorePath = join(dirname(currentFilePath), "../data/conversations.json");
+const vercelStorePath = "/tmp/magi-conversations.json";
+const configuredStorePath = process.env.CONVERSATION_STORE_PATH?.trim();
+const storePath = configuredStorePath || (process.env.VERCEL ? vercelStorePath : defaultStorePath);
+const dataDirectory = dirname(storePath);
+let loggedEphemeralStoreWarning = false;
+
+function maybeLogEphemeralStoreWarning() {
+  if (loggedEphemeralStoreWarning || !process.env.VERCEL || configuredStorePath) {
+    return;
+  }
+  loggedEphemeralStoreWarning = true;
+  console.warn(
+    `[conversation-store] using ephemeral storage at ${storePath}. Data may disappear between Vercel invocations. Configure CONVERSATION_STORE_PATH or move persistence to external storage for durable history.`,
+  );
+}
+
 async function ensureStoreFile() {
+  maybeLogEphemeralStoreWarning();
   await mkdir(dataDirectory, { recursive: true });
   try {
     await readFile(storePath, "utf-8");
